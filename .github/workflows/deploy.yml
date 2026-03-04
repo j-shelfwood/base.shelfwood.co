@@ -1,0 +1,75 @@
+name: Deploy to influx.shelfwood.co
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          INFLUX_URL: ${{ secrets.INFLUX_URL }}
+          INFLUX_TOKEN: ${{ secrets.INFLUX_TOKEN }}
+          INFLUX_ORG: ${{ secrets.INFLUX_ORG }}
+          INFLUX_BUCKET: ${{ secrets.INFLUX_BUCKET }}
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Sync dist to server
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            dist/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/base-shelfwood/dist/
+
+      - name: Sync Dockerfile and package files
+        run: |
+          rsync -az \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            Dockerfile package.json package-lock.json \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/base-shelfwood/
+
+      - name: Rebuild and restart container
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+            set -e
+            cd /opt/base-shelfwood
+            docker build -t base-shelfwood . --quiet
+            docker rm -f base-shelfwood 2>/dev/null || true
+            docker run -d \
+              --name base-shelfwood \
+              --restart unless-stopped \
+              --env-file /opt/base-shelfwood/.env \
+              -p 127.0.0.1:3000:3000 \
+              base-shelfwood
+            sleep 2
+            STATUS=\$(docker inspect --format='{{.State.Status}}' base-shelfwood 2>/dev/null || echo 'missing')
+            if [ \"\$STATUS\" != 'running' ]; then
+              echo 'ERROR: container not running'
+              docker logs base-shelfwood 2>&1 | tail -20
+              exit 1
+            fi
+            echo 'Deploy complete: https://base.shelfwood.co'
+          "
