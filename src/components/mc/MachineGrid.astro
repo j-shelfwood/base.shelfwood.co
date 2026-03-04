@@ -1,0 +1,51 @@
+---
+interface MachineEntry {
+  name: string;
+  type: string;
+  mod: string;
+  active: boolean;
+}
+
+interface Props {
+  machines: MachineEntry[];
+  id?: string;
+}
+
+const { machines, id } = Astro.props;
+
+// Group by type
+const grouped = machines.reduce<Record<string, MachineEntry[]>>((acc, m) => {
+  const key = `${m.mod}:${m.type}`;
+  (acc[key] ??= []).push(m);
+  return acc;
+}, {});
+---
+
+<div class="flex flex-col gap-3" id={id}>
+  {Object.entries(grouped).map(([key, group]) => {
+    const activeCount = group.filter(m => m.active).length;
+    const label = group[0]?.type ?? key;
+    return (
+      <div>
+        <div class="flex items-center gap-2 mb-1.5">
+          <span class="font-mc text-xs text-mc-muted">{label}</span>
+          <span class="font-mc text-xs text-mc-emerald">{activeCount}/{group.length}</span>
+        </div>
+        <div class="flex flex-wrap gap-1">
+          {group.map(m => (
+            <div
+              class:list={[
+                'w-4 h-4 pixel-border transition-colors',
+                m.active ? 'bg-mc-emerald' : 'bg-mc-stone',
+              ]}
+              title={`${m.name} — ${m.active ? 'ACTIVE' : 'IDLE'}`}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  })}
+  {machines.length === 0 && (
+    <span class="font-mc text-xs text-mc-muted">No machine data</span>
+  )}
+</div>

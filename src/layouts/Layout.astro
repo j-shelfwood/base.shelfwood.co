@@ -1,0 +1,90 @@
+---
+import '@/styles/site.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = 'MC Base — Shelfwood',
+  description = 'Minecraft CC:Tweaked telemetry dashboard',
+} = Astro.props;
+
+const navLinks = [
+  { href: '/', label: 'Overview' },
+  { href: '/machines', label: 'Machines' },
+  { href: '/storage', label: 'Storage' },
+  { href: '/crafting', label: 'Crafting' },
+];
+
+const currentPath = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content={description} />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+  </head>
+  <body class="min-h-screen flex flex-col">
+    <!-- Top navigation bar -->
+    <nav class="mc-panel-raised border-b-2 border-mc-cobble sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-4 flex items-center gap-1 h-12">
+        <!-- Logo -->
+        <a href="/" class="font-mc text-mc-diamond text-sm glow-diamond mr-6 shrink-0">
+          ⚡ MC BASE
+        </a>
+
+        <!-- Nav links -->
+        {navLinks.map(link => (
+          <a
+            href={link.href}
+            class:list={[
+              'font-mc text-xs px-3 py-1.5 transition-colors',
+              currentPath === link.href
+                ? 'mc-slot text-mc-white'
+                : 'text-mc-muted hover:text-mc-white hover:bg-mc-stone/40',
+            ]}
+          >
+            {link.label}
+          </a>
+        ))}
+
+        <!-- Live indicator -->
+        <div class="ml-auto flex items-center gap-2">
+          <span id="live-dot" class="w-2 h-2 rounded-none bg-mc-emerald animate-pulse"></span>
+          <span id="live-label" class="font-mc text-xs text-mc-muted">LIVE</span>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main content -->
+    <main class="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
+      <slot />
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t-2 border-mc-cobble px-4 py-3">
+      <div class="max-w-7xl mx-auto flex items-center justify-between">
+        <span class="font-mc text-xs text-mc-muted">CC:TWEAKED TELEMETRY</span>
+        <span class="font-mc text-xs text-mc-stone" id="last-updated"></span>
+      </div>
+    </footer>
+
+    <script>
+      // Update last-updated timestamp
+      function updateTimestamp() {
+        const el = document.getElementById('last-updated');
+        if (el) {
+          el.textContent = `UPDATED ${new Date().toLocaleTimeString()}`;
+        }
+      }
+      updateTimestamp();
+    </script>
+  </body>
+</html>

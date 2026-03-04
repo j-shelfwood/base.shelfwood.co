@@ -1,0 +1,50 @@
+---
+interface Props {
+  value: number;      // 0–100
+  max?: number;       // default 100
+  label?: string;
+  colour?: 'gold' | 'diamond' | 'emerald' | 'redstone';
+  showPercent?: boolean;
+  id?: string;
+}
+
+const {
+  value,
+  max = 100,
+  label,
+  colour = 'emerald',
+  showPercent = false,
+  id,
+} = Astro.props;
+
+const pct = Math.min(100, Math.max(0, (value / max) * 100));
+
+const fillColour: Record<string, string> = {
+  gold: 'background-color: var(--color-mc-gold)',
+  diamond: 'background-color: var(--color-mc-diamond)',
+  emerald: 'background-color: var(--color-mc-emerald)',
+  redstone: 'background-color: var(--color-mc-redstone)',
+};
+
+const style = fillColour[colour] ?? fillColour.emerald;
+---
+
+<div class="flex flex-col gap-1">
+  {label && (
+    <div class="flex justify-between items-center">
+      <span class="font-mc text-xs text-mc-muted">{label}</span>
+      {showPercent && (
+        <span class="font-mc text-xs text-mc-white" id={id ? `${id}-pct` : undefined}>
+          {pct.toFixed(1)}%
+        </span>
+      )}
+    </div>
+  )}
+  <div class="mc-progress-track">
+    <div
+      class="mc-progress-fill"
+      style={`width: ${pct}%; ${style}`}
+      id={id}
+    ></div>
+  </div>
+</div>

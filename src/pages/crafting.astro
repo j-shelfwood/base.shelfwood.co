@@ -1,0 +1,185 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import Panel from '@/components/mc/Panel.astro';
+import StatCard from '@/components/mc/StatCard.astro';
+import ProgressBar from '@/components/mc/ProgressBar.astro';
+import { craftingJobs, aeCPUs } from '@/lib/queries';
+
+const [jobsRes, cpusRes] = await Promise.allSettled([
+  craftingJobs(),
+  aeCPUs(),
+]);
+
+const jobs = jobsRes.status === 'fulfilled' ? jobsRes.value : [];
+const cpus = cpusRes.status === 'fulfilled' ? cpusRes.value : { total: 0, busy: 0, busy_percent: 0, cpus: [] };
+
+function itemLabel(name: string): string {
+  return name.replace(/^.*:/, '').replace(/_/g, ' ');
+}
+---
+
+<Layout title="MC Base — Crafting">
+  <div class="mb-6">
+    <h1 class="font-mc text-mc-white text-xl">CRAFTING</h1>
+    <p class="font-mc text-xs text-mc-muted mt-1">ACTIVE JOBS · CPU STATUS</p>
+  </div>
+
+  <!-- CPU stats -->
+  <div class="grid grid-cols-3 gap-3 mb-6">
+    <StatCard label="CPUs Busy" value={`${cpus.busy}/${cpus.total}`} colour="amethyst" id="stat-cpus" />
+    <StatCard label="Active Jobs" value={jobs.length} colour="amethyst" id="stat-jobs" />
+    <StatCard label="CPUs Free" value={cpus.total - cpus.busy} colour={cpus.total - cpus.busy > 0 ? 'emerald' : 'redstone'} id="stat-free" />
+  </div>
+
+  <!-- CPU utilisation bar -->
+  <div class="mb-6">
+    <ProgressBar
+      value={cpus.busy}
+      max={cpus.total || 1}
+      colour="amethyst"
+      label="CPU Utilisation"
+      showPercent
+      id="progress-cpu"
+    />
+  </div>
+
+  <!-- Per-CPU detail -->
+  {cpus.cpus.length > 0 && (
+    <Panel title="CPU DETAIL" raised noPadding class="mb-6">
+      <div id="cpu-detail">
+        {cpus.cpus.map(cpu => (
+          <div class="flex items-center justify-between px-4 py-2 border-b border-mc-cobble/50 last:border-0">
+            <div class="flex flex-col gap-0.5">
+              <span class="font-mc text-xs text-mc-white">{cpu.name}</span>
+              <span class="font-mc text-xs text-mc-muted">{cpu.storage.toLocaleString()} bytes · {cpu.coProcessors} co-proc</span>
+            </div>
+            <span class:list={['font-mc text-xs', cpu.busy ? 'text-mc-emerald' : 'text-mc-muted']}>
+              {cpu.busy ? 'BUSY' : 'FREE'}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  )}
+
+  <!-- Active jobs -->
+  <Panel title="ACTIVE CRAFTING JOBS" raised noPadding>
+    <div id="job-list">
+      {jobs.length === 0 && (
+        <p class="font-mc text-xs text-mc-muted px-4 py-6">
+          No active crafting jobs
+        </p>
+      )}
+      {jobs.map(job => (
+        <div class="px-4 py-3 border-b border-mc-cobble/50 last:border-0">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex flex-col gap-0.5">
+              <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(job.item)}</span>
+              <span class="font-mc text-xs text-mc-muted">{job.item}</span>
+            </div>
+            <div class="text-right">
+              <span class="font-mc text-xs text-mc-amethyst">CPU: {job.cpu}</span>
+            </div>
+          </div>
+          <ProgressBar
+            value={job.completion}
+            colour="amethyst"
+            label={`${job.crafted.toLocaleString()} / ${job.quantity.toLocaleString()} crafted`}
+            showPercent
+          />
+        </div>
+      ))}
+    </div>
+  </Panel>
+</Layout>
+
+<script>
+  const REFRESH_MS = 5_000;
+
+  function itemLabel(name: string): string {
+    return name.replace(/^.*:/, '').replace(/_/g, ' ');
+  }
+
+  // StatCard puts id on the value <span> directly — set textContent directly
+  function setEl(id: string, val: string) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  }
+
+  function renderJobs(jobs: { item: string; cpu: string; quantity: number; crafted: number; completion: number }[]) {
+    const list = document.getElementById('job-list');
+    if (!list) return;
+
+    setEl('stat-jobs', String(jobs.length));
+
+    if (jobs.length === 0) {
+      list.innerHTML = '<p class="font-mc text-xs text-mc-muted px-4 py-6">No active crafting jobs</p>';
+      return;
+    }
+
+    list.innerHTML = jobs.map(job => {
+      const pct = Math.min(100, Math.max(0, job.completion));
+      return `
+        <div class="px-4 py-3 border-b border-mc-cobble/50 last:border-0">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex flex-col gap-0.5">
+              <span class="font-mc text-xs text-mc-white capitalize">${itemLabel(job.item)}</span>
+              <span class="font-mc text-xs text-mc-muted">${job.item}</span>
+            </div>
+            <span class="font-mc text-xs text-mc-amethyst">CPU: ${job.cpu}</span>
+          </div>
+          <div class="flex flex-col gap-1">
+            <div class="flex justify-between">
+              <span class="font-mc text-xs text-mc-muted">${job.crafted.toLocaleString()} / ${job.quantity.toLocaleString()} crafted</span>
+              <span class="font-mc text-xs text-mc-white">${pct.toFixed(1)}%</span>
+            </div>
+            <div class="mc-progress-track">
+              <div class="mc-progress-fill" style="width:${pct}%;background-color:var(--color-mc-amethyst)">
+                <span class="absolute inset-0 top-0 bottom-1/2 bg-white/20"></span>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function renderCPUs(cpus: { total: number; busy: number; busy_percent: number; cpus: { name: string; storage: number; coProcessors: number; busy: boolean }[] }) {
+    setEl('stat-cpus', `${cpus.busy}/${cpus.total}`);
+    setEl('stat-free', String(cpus.total - cpus.busy));
+
+    const bar = document.getElementById('progress-cpu');
+    if (bar) {
+      const fill = bar.querySelector('.mc-progress-fill') as HTMLElement | null;
+      if (fill) fill.style.width = `${cpus.busy_percent.toFixed(1)}%`;
+      const pctSpan = bar.querySelector('.pct-label') as HTMLElement | null;
+      if (pctSpan) pctSpan.textContent = `${cpus.busy_percent.toFixed(1)}%`;
+    }
+
+    const detail = document.getElementById('cpu-detail');
+    if (detail && cpus.cpus.length > 0) {
+      detail.innerHTML = cpus.cpus.map(cpu => `
+        <div class="flex items-center justify-between px-4 py-2 border-b border-mc-cobble/50 last:border-0">
+          <div class="flex flex-col gap-0.5">
+            <span class="font-mc text-xs text-mc-white">${cpu.name}</span>
+            <span class="font-mc text-xs text-mc-muted">${cpu.storage.toLocaleString()} bytes · ${cpu.coProcessors} co-proc</span>
+          </div>
+          <span class="font-mc text-xs ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}">${cpu.busy ? 'BUSY' : 'FREE'}</span>
+        </div>`).join('');
+    }
+  }
+
+  async function refresh() {
+    try {
+      const data = await fetch('/api/crafting').then(r => r.json());
+      if (data.error) return;
+      if (data.jobs !== undefined) renderJobs(data.jobs);
+      if (data.cpus) renderCPUs(data.cpus);
+      const el = document.getElementById('last-updated');
+      if (el) el.textContent = `UPDATED ${new Date().toLocaleTimeString()}`;
+    } catch (err) {
+      console.error('crafting refresh error', err);
+    }
+  }
+
+  setInterval(refresh, REFRESH_MS);
+</script>

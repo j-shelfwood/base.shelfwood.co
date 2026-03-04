@@ -1,0 +1,41 @@
+---
+interface Props {
+  label: string;
+  value: string | number;
+  suffix?: string;
+  colour?: 'gold' | 'diamond' | 'emerald' | 'redstone' | 'amethyst' | 'copper' | 'white';
+  class?: string;
+  id?: string;
+}
+
+const {
+  label,
+  value,
+  suffix = '',
+  colour = 'white',
+  class: extraClass = '',
+  id,
+} = Astro.props;
+
+const colourMap: Record<string, string> = {
+  gold: 'text-mc-gold glow-gold',
+  diamond: 'text-mc-diamond glow-diamond',
+  emerald: 'text-mc-emerald glow-emerald',
+  redstone: 'text-mc-redstone glow-redstone',
+  amethyst: 'text-mc-amethyst',
+  copper: 'text-mc-copper',
+  white: 'text-mc-white',
+};
+
+const valueClass = colourMap[colour] ?? colourMap.white;
+---
+
+<div class:list={['mc-panel flex flex-col gap-1', extraClass]}>
+  <span class="font-mc text-xs text-mc-muted uppercase tracking-wider">{label}</span>
+  <span
+    class:list={['font-mc text-2xl leading-tight', valueClass]}
+    id={id}
+  >
+    {value}{suffix}
+  </span>
+</div>

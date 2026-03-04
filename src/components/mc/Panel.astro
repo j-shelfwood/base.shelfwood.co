@@ -1,0 +1,21 @@
+---
+interface Props {
+  title?: string;
+  class?: string;
+  raised?: boolean;
+  noPadding?: boolean;
+}
+
+const { title, class: extraClass = '', raised = false, noPadding = false } = Astro.props;
+const panelClass = raised ? 'mc-panel-raised' : 'mc-panel';
+const paddingClass = noPadding ? '' : '';
+---
+
+<div class:list={[panelClass, extraClass]}>
+  {title && (
+    <div class="mc-header -mx-4 -mt-4 mb-4">
+      {title}
+    </div>
+  )}
+  <slot />
+</div>

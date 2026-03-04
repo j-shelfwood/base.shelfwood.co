@@ -1,0 +1,248 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import Panel from '@/components/mc/Panel.astro';
+import StatCard from '@/components/mc/StatCard.astro';
+import ProgressBar from '@/components/mc/ProgressBar.astro';
+import LineChart from '@/components/charts/LineChart.astro';
+import { energySummary, energyFlow, aeSummary, aeCPUs, machineSummary, energyHistory, energyFlowHistory } from '@/lib/queries';
+
+const [energy, flow, ae, cpus, machines, energyHist, flowHist] = await Promise.allSettled([
+  energySummary(),
+  energyFlow(),
+  aeSummary(),
+  aeCPUs(),
+  machineSummary(),
+  energyHistory('-1h'),
+  energyFlowHistory('-1h'),
+]);
+
+const e = energy.status === 'fulfilled' ? energy.value : null;
+const f = flow.status === 'fulfilled' ? flow.value : [];
+const a = ae.status === 'fulfilled' ? ae.value : null;
+const c = cpus.status === 'fulfilled' ? cpus.value : { total: 0, busy: 0 };
+const m = machines.status === 'fulfilled' ? machines.value : null;
+const eHist = energyHist.status === 'fulfilled' ? energyHist.value : [];
+const fHist = flowHist.status === 'fulfilled' ? flowHist.value : [];
+
+function fmt(n: number | null | undefined, dec = 0): string {
+  if (n == null) return '—';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return n.toFixed(dec);
+}
+
+// Split flow history by detector name
+const flowNames = [...new Set(fHist.map(r => r.name))];
+const genName = flowNames[0] ?? '';
+const conName = flowNames[1] ?? flowNames[0] ?? '';
+const genHist = fHist.filter(r => r.name === genName);
+const conHist = fHist.filter(r => r.name === conName);
+
+const genRate = f.find(r => r.name === genName)?.rate_fe_t ?? 0;
+const conRate = f.find(r => r.name === conName)?.rate_fe_t ?? 0;
+const netFlow = genRate - conRate;
+---
+
+<Layout title="MC Base — Overview">
+  <!-- Page header -->
+  <div class="mb-6 flex items-end justify-between">
+    <div>
+      <h1 class="font-mc text-mc-white text-xl glow-diamond">OVERVIEW</h1>
+      <p class="font-mc text-xs text-mc-muted mt-1">ENERGY · STORAGE · MACHINES</p>
+    </div>
+  </div>
+
+  <!-- ── Row 1: Headline stats ─────────────────────────────────────────────── -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+    <StatCard
+      label="Energy Stored"
+      value={fmt(e?.stored_fe)}
+      suffix=" FE"
+      colour="gold"
+      id="stat-stored-fe"
+    />
+    <StatCard
+      label="Energy %"
+      value={e ? e.percent.toFixed(1) : '—'}
+      suffix="%"
+      colour="gold"
+      id="stat-energy-pct"
+    />
+    <StatCard
+      label="Generation"
+      value={fmt(genRate)}
+      suffix=" FE/t"
+      colour="emerald"
+      id="stat-gen"
+    />
+    <StatCard
+      label="Consumption"
+      value={fmt(conRate)}
+      suffix=" FE/t"
+      colour="redstone"
+      id="stat-con"
+    />
+    <StatCard
+      label="Net Flow"
+      value={fmt(netFlow)}
+      suffix=" FE/t"
+      colour={netFlow >= 0 ? 'emerald' : 'redstone'}
+      id="stat-net"
+    />
+    <StatCard
+      label="AE Items"
+      value={fmt(a?.items_total)}
+      colour="diamond"
+      id="stat-items"
+    />
+  </div>
+
+  <!-- ── Row 2: AE + Machine stats ─────────────────────────────────────────── -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+    <StatCard
+      label="AE Unique Items"
+      value={fmt(a?.items_unique)}
+      colour="diamond"
+      id="stat-items-unique"
+    />
+    <StatCard
+      label="AE Energy"
+      value={fmt(a?.energy_usage)}
+      suffix=" FE/t"
+      colour="diamond"
+      id="stat-ae-energy"
+    />
+    <StatCard
+      label="Storage Used"
+      value={a ? ((a.item_storage_used / (a.item_storage_total || 1)) * 100).toFixed(1) : '—'}
+      suffix="%"
+      colour="lapis"
+      id="stat-storage-pct"
+    />
+    <StatCard
+      label="CPUs Busy"
+      value={c ? `${c.busy}/${c.total}` : '—'}
+      colour="amethyst"
+      id="stat-cpus"
+    />
+    <StatCard
+      label="Machines Active"
+      value={fmt(m?.active_machines)}
+      colour="copper"
+      id="stat-machines-active"
+    />
+    <StatCard
+      label="Machines Total"
+      value={fmt(m?.total_machines)}
+      colour="white"
+      id="stat-machines-total"
+    />
+  </div>
+
+  <!-- ── Row 3: Energy graphs ───────────────────────────────────────────────── -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
+    <Panel title="GENERATION VS CONSUMPTION" class="lg:col-span-2" raised>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <p class="font-mc text-xs text-mc-emerald mb-2">GENERATION</p>
+          <LineChart data={genHist} colour="var(--color-mc-emerald)" height={80} suffix=" FE/t" id="chart-gen" />
+        </div>
+        <div>
+          <p class="font-mc text-xs text-mc-redstone mb-2">CONSUMPTION</p>
+          <LineChart data={conHist} colour="var(--color-mc-redstone)" height={80} suffix=" FE/t" id="chart-con" />
+        </div>
+      </div>
+    </Panel>
+
+    <Panel title="ENERGY STORAGE %" raised>
+      <ProgressBar value={e?.percent ?? 0} colour="gold" showPercent label="Charge" id="progress-energy" />
+      <div class="mt-3">
+        <LineChart data={eHist} colour="var(--color-mc-gold)" height={80} suffix="%" id="chart-energy-pct" />
+      </div>
+    </Panel>
+  </div>
+
+  <!-- ── Row 4: Storage breakdown ──────────────────────────────────────────── -->
+  {a && (
+    <Panel title="AE2 STORAGE" raised>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <ProgressBar
+          value={a.item_storage_used}
+          max={a.item_storage_total || 1}
+          colour="diamond"
+          label="Item Storage"
+          showPercent
+          id="progress-item-storage"
+        />
+        <div class="flex flex-col gap-1">
+          <span class="font-mc text-xs text-mc-muted">ITEMS TRACKED</span>
+          <span class="font-mc text-sm text-mc-diamond">{a.items_unique.toLocaleString()} unique / {a.items_total.toLocaleString()} total</span>
+        </div>
+      </div>
+    </Panel>
+  )}
+</Layout>
+
+<script>
+  // Auto-refresh every 30 seconds
+  const REFRESH_MS = 30_000;
+
+  function fmt(n: number, dec = 0): string {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+    return n.toFixed(dec);
+  }
+
+  // StatCard puts id on the value <span> directly
+  function setEl(id: string, val: string) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  }
+
+  async function refresh() {
+    try {
+      const [eRes, aeRes, mRes] = await Promise.all([
+        fetch('/api/energy').then(r => r.json()),
+        fetch('/api/ae-summary').then(r => r.json()),
+        fetch('/api/machines').then(r => r.json()),
+      ]);
+
+      if (eRes.summary) {
+        const s = eRes.summary;
+        setEl('stat-stored-fe', fmt(s.stored_fe) + ' FE');
+        setEl('stat-energy-pct', s.percent.toFixed(1) + '%');
+      }
+      if (eRes.flow && Array.isArray(eRes.flow) && eRes.flow.length >= 2) {
+        const gen = eRes.flow[0]?.rate_fe_t ?? 0;
+        const con = eRes.flow[1]?.rate_fe_t ?? 0;
+        setEl('stat-gen', fmt(gen) + ' FE/t');
+        setEl('stat-con', fmt(con) + ' FE/t');
+        setEl('stat-net', fmt(gen - con) + ' FE/t');
+      }
+      if (aeRes.summary) {
+        const a = aeRes.summary;
+        setEl('stat-items', fmt(a.items_total));
+        setEl('stat-items-unique', fmt(a.items_unique));
+        setEl('stat-ae-energy', fmt(a.energy_usage) + ' FE/t');
+        const storagePct = a.item_storage_total > 0
+          ? ((a.item_storage_used / a.item_storage_total) * 100).toFixed(1) + '%'
+          : '—';
+        setEl('stat-storage-pct', storagePct);
+      }
+      if (aeRes.cpus) {
+        setEl('stat-cpus', `${aeRes.cpus.busy}/${aeRes.cpus.total}`);
+      }
+      if (mRes.summary) {
+        setEl('stat-machines-active', fmt(mRes.summary.active_machines));
+        setEl('stat-machines-total', fmt(mRes.summary.total_machines));
+      }
+
+      const el = document.getElementById('last-updated');
+      if (el) el.textContent = `UPDATED ${new Date().toLocaleTimeString()}`;
+    } catch (err) {
+      console.error('Refresh error', err);
+    }
+  }
+
+  setInterval(refresh, REFRESH_MS);
+</script>

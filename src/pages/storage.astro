@@ -1,0 +1,189 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import Panel from '@/components/mc/Panel.astro';
+import StatCard from '@/components/mc/StatCard.astro';
+import ProgressBar from '@/components/mc/ProgressBar.astro';
+import { aeSummary, aeItems } from '@/lib/queries';
+
+const [summaryRes, itemsRes] = await Promise.allSettled([
+  aeSummary(),
+  aeItems(),
+]);
+
+const summary = summaryRes.status === 'fulfilled' ? summaryRes.value : null;
+const items = itemsRes.status === 'fulfilled' ? itemsRes.value : [];
+
+function fmt(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return n.toLocaleString();
+}
+
+function itemLabel(registryName: string): string {
+  return registryName
+    .replace(/^.*:/, '')
+    .replace(/_/g, ' ');
+}
+---
+
+<Layout title="MC Base — Storage">
+  <div class="mb-6 flex items-end justify-between gap-4 flex-wrap">
+    <div>
+      <h1 class="font-mc text-mc-white text-xl">STORAGE</h1>
+      <p class="font-mc text-xs text-mc-muted mt-1">AE2 ITEM BROWSER</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <!-- Sort controls -->
+      <div class="flex items-center gap-1">
+        <button id="sort-count" class="mc-slot px-3 py-1.5 font-mc text-xs text-mc-diamond">COUNT ▼</button>
+        <button id="sort-name" class="mc-slot px-3 py-1.5 font-mc text-xs text-mc-muted">NAME</button>
+      </div>
+      <!-- Search box -->
+      <div class="mc-slot px-3 py-2 flex items-center gap-2">
+        <span class="font-mc text-xs text-mc-muted">SEARCH:</span>
+        <input
+          id="item-search"
+          type="text"
+          placeholder="iron ingot..."
+          class="bg-transparent font-mc text-xs text-mc-white outline-none placeholder:text-mc-stone w-40"
+          autocomplete="off"
+        />
+      </div>
+    </div>
+  </div>
+
+  <!-- Storage stats -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+    <StatCard label="Total Items" value={summary ? fmt(summary.items_total) : '—'} colour="diamond" id="stat-total-items" />
+    <StatCard label="Unique Types" value={summary?.items_unique ?? '—'} colour="diamond" id="stat-unique" />
+    <StatCard label="Storage Used" value={summary ? ((summary.item_storage_used / (summary.item_storage_total || 1)) * 100).toFixed(1) + '%' : '—'} colour="lapis" id="stat-storage-pct" />
+    <StatCard label="Fluids" value={summary ? fmt(summary.fluids_total) : '—'} colour="diamond" id="stat-fluids" />
+  </div>
+
+  <!-- Storage bar -->
+  {summary && (
+    <div class="mb-6">
+      <ProgressBar
+        value={summary.item_storage_used}
+        max={summary.item_storage_total || 1}
+        colour="diamond"
+        label="Item Cell Capacity"
+        showPercent
+        id="progress-storage"
+      />
+    </div>
+  )}
+
+  <!-- Item list -->
+  <Panel title="ITEMS" raised noPadding>
+    <div id="item-list" class="divide-y divide-mc-cobble/50">
+      {items.map(item => (
+        <div
+          class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors cursor-pointer item-row"
+          data-item={item.item}
+        >
+          <div class="flex flex-col gap-0.5">
+            <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(item.item)}</span>
+            <span class="font-mc text-xs text-mc-muted">{item.item}</span>
+          </div>
+          <span class="font-mc text-sm text-mc-diamond shrink-0">{fmt(item.count)}</span>
+        </div>
+      ))}
+      {items.length === 0 && (
+        <p class="font-mc text-xs text-mc-muted px-4 py-6">No items found</p>
+      )}
+    </div>
+  </Panel>
+</Layout>
+
+<script>
+  const REFRESH_MS = 60_000;
+  let currentQuery = '';
+  let sortMode: 'count' | 'name' = 'count';
+  let allItems: { item: string; count: number }[] = [];
+
+  function itemLabel(name: string): string {
+    return name.replace(/^.*:/, '').replace(/_/g, ' ');
+  }
+
+  function fmt(n: number): string {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+    return n.toLocaleString();
+  }
+
+  function sortItems(items: { item: string; count: number }[]) {
+    const copy = [...items];
+    if (sortMode === 'name') {
+      copy.sort((a, b) => itemLabel(a.item).localeCompare(itemLabel(b.item)));
+    } else {
+      copy.sort((a, b) => b.count - a.count);
+    }
+    return copy;
+  }
+
+  function updateSortButtons() {
+    const btnCount = document.getElementById('sort-count');
+    const btnName = document.getElementById('sort-name');
+    if (btnCount) {
+      btnCount.textContent = sortMode === 'count' ? 'COUNT ▼' : 'COUNT';
+      btnCount.className = `mc-slot px-3 py-1.5 font-mc text-xs ${sortMode === 'count' ? 'text-mc-diamond' : 'text-mc-muted'}`;
+    }
+    if (btnName) {
+      btnName.textContent = sortMode === 'name' ? 'NAME ▲' : 'NAME';
+      btnName.className = `mc-slot px-3 py-1.5 font-mc text-xs ${sortMode === 'name' ? 'text-mc-diamond' : 'text-mc-muted'}`;
+    }
+  }
+
+  function renderItems(items: { item: string; count: number }[]) {
+    const list = document.getElementById('item-list');
+    if (!list) return;
+    const sorted = sortItems(items);
+    list.innerHTML = sorted.length === 0
+      ? '<p class="font-mc text-xs text-mc-muted px-4 py-6">No items found</p>'
+      : sorted.map(i => `
+        <div class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors cursor-pointer item-row" data-item="${i.item}">
+          <div class="flex flex-col gap-0.5">
+            <span class="font-mc text-xs text-mc-white capitalize">${itemLabel(i.item)}</span>
+            <span class="font-mc text-xs text-mc-muted">${i.item}</span>
+          </div>
+          <span class="font-mc text-sm text-mc-diamond">${fmt(i.count)}</span>
+        </div>
+      `).join('');
+  }
+
+  async function loadItems(q?: string) {
+    const url = q ? `/api/ae-items?q=${encodeURIComponent(q)}` : '/api/ae-items';
+    const data = await fetch(url).then(r => r.json());
+    if (data.items) {
+      allItems = data.items;
+      renderItems(allItems);
+    }
+  }
+
+  // Sort button handlers
+  document.getElementById('sort-count')?.addEventListener('click', () => {
+    sortMode = 'count';
+    updateSortButtons();
+    renderItems(allItems);
+  });
+  document.getElementById('sort-name')?.addEventListener('click', () => {
+    sortMode = 'name';
+    updateSortButtons();
+    renderItems(allItems);
+  });
+
+  // Search debounce
+  let searchTimeout: ReturnType<typeof setTimeout>;
+  const searchInput = document.getElementById('item-search') as HTMLInputElement | null;
+  searchInput?.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      currentQuery = searchInput.value.trim();
+      loadItems(currentQuery || undefined);
+    }, 300);
+  });
+
+  // Auto-refresh
+  setInterval(() => loadItems(currentQuery || undefined), REFRESH_MS);
+</script>
