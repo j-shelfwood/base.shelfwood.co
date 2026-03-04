@@ -314,7 +314,7 @@ from(bucket: "${INFLUX_BUCKET}")
 `),
     queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -1m)
+  |> range(start: -2m)
   |> filter(fn: (r) => r._measurement == "mi_machine_slot_summary")
   |> last()
   |> pivot(rowKey: ["_time", "name", "type", "node"], columnKey: ["_field"], valueColumn: "_value")
