@@ -3,6 +3,7 @@ import Layout from '@/layouts/Layout.astro';
 import Panel from '@/components/mc/Panel.astro';
 import StatCard from '@/components/mc/StatCard.astro';
 import ProgressBar from '@/components/mc/ProgressBar.astro';
+import LineChart from '@/components/charts/LineChart.astro';
 import DualLineChart from '@/components/charts/DualLineChart.astro';
 import { energySummary, energyFlow, aeSummary, aeCPUs, machineSummary, energyHistory, energyFlowHistory } from '@/lib/queries';
 
@@ -158,6 +159,76 @@ const etaValue = e ? energyEta(e.stored_fe, e.capacity_fe, netFlow) : '—';
     />
   </div>
 
+  <!-- ── Row 2.5: Base health score ───────────────────────────────────────────── -->
+  <div class="mb-6">
+    <div class="mc-panel-raised flex items-center gap-6 px-6 py-4">
+      <!-- Score -->
+      <div class="flex flex-col items-center shrink-0 w-24">
+        <span class="font-mc text-xs text-mc-muted mb-1">BASE HEALTH</span>
+        <span id="health-score" class="font-mc text-5xl leading-none glow-emerald text-mc-emerald">
+          {(() => {
+            const energyPct  = e?.percent ?? 0;
+            const machinePct = m ? m.active_percent : 0;
+            const storagePct = a ? (1 - (a.item_storage_used / (a.item_storage_total || 1))) * 100 : 100;
+            return Math.round(energyPct * 0.5 + machinePct * 0.3 + storagePct * 0.2);
+          })()}
+        </span>
+        <span class="font-mc text-xs text-mc-muted mt-1">/ 100</span>
+      </div>
+
+      <!-- Divider -->
+      <div class="w-px self-stretch bg-mc-cobble/50" />
+
+      <!-- Component bars -->
+      <div class="flex-1 flex flex-col gap-3">
+        <div class="flex items-center gap-3">
+          <span class="font-mc text-xs text-mc-gold w-24 shrink-0">ENERGY</span>
+          <div class="flex-1 mc-progress-track">
+            <div id="health-bar-energy" class="mc-progress-fill bg-mc-gold" style={`width:${e?.percent ?? 0}%`} />
+          </div>
+          <span id="health-val-energy" class="font-mc text-xs text-mc-gold w-10 text-right">
+            {(e?.percent ?? 0).toFixed(0)}%
+          </span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="font-mc text-xs text-mc-copper w-24 shrink-0">MACHINES</span>
+          <div class="flex-1 mc-progress-track">
+            <div id="health-bar-machines" class="mc-progress-fill bg-mc-copper" style={`width:${m?.active_percent ?? 0}%`} />
+          </div>
+          <span id="health-val-machines" class="font-mc text-xs text-mc-copper w-10 text-right">
+            {(m?.active_percent ?? 0).toFixed(0)}%
+          </span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="font-mc text-xs text-mc-diamond w-24 shrink-0">STORAGE</span>
+          <div class="flex-1 mc-progress-track">
+            <div id="health-bar-storage" class="mc-progress-fill bg-mc-diamond"
+              style={`width:${a ? (1 - a.item_storage_used / (a.item_storage_total || 1)) * 100 : 100}%`} />
+          </div>
+          <span id="health-val-storage" class="font-mc text-xs text-mc-diamond w-10 text-right">
+            {a ? ((1 - a.item_storage_used / (a.item_storage_total || 1)) * 100).toFixed(0) : 100}%
+          </span>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div class="w-px self-stretch bg-mc-cobble/50 hidden sm:block" />
+
+      <!-- Status label -->
+      <div class="hidden sm:flex flex-col items-center shrink-0 w-20">
+        <span id="health-status" class="font-mc text-xs text-center glow-emerald text-mc-emerald">
+          {(() => {
+            const score = Math.round((e?.percent ?? 0) * 0.5 + (m?.active_percent ?? 0) * 0.3 + (a ? (1 - a.item_storage_used / (a.item_storage_total || 1)) * 100 : 100) * 0.2);
+            if (score >= 80) return 'NOMINAL';
+            if (score >= 60) return 'DEGRADED';
+            if (score >= 40) return 'WARNING';
+            return 'CRITICAL';
+          })()}
+        </span>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Row 3: Energy graphs ───────────────────────────────────────────────── -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
     <Panel title="GENERATION VS CONSUMPTION" class="lg:col-span-2" raised>
@@ -275,6 +346,37 @@ const etaValue = e ? energyEta(e.stored_fe, e.capacity_fe, netFlow) : '—';
       if (mRes.summary) {
         setEl('stat-machines-active', fmt(mRes.summary.active_machines));
         setEl('stat-machines-total', fmt(mRes.summary.total_machines));
+      }
+
+      // Base health score
+      const energyPct   = eRes.summary?.percent ?? 0;
+      const machinePct  = mRes.summary?.active_percent ?? 0;
+      const storageUsed = aeRes.summary?.item_storage_used ?? 0;
+      const storageTotal = aeRes.summary?.item_storage_total ?? 1;
+      const storagePct  = (1 - storageUsed / storageTotal) * 100;
+      const score = Math.round(energyPct * 0.5 + machinePct * 0.3 + storagePct * 0.2);
+
+      setEl('health-score', String(score));
+      setEl('health-val-energy',   energyPct.toFixed(0) + '%');
+      setEl('health-val-machines', machinePct.toFixed(0) + '%');
+      setEl('health-val-storage',  storagePct.toFixed(0) + '%');
+
+      const statusEl = document.getElementById('health-status');
+      const scoreEl  = document.getElementById('health-score');
+      const statusText = score >= 80 ? 'NOMINAL' : score >= 60 ? 'DEGRADED' : score >= 40 ? 'WARNING' : 'CRITICAL';
+      const statusColour = score >= 80 ? 'text-mc-emerald glow-emerald' : score >= 60 ? 'text-mc-gold glow-gold' : score >= 40 ? 'text-mc-copper' : 'text-mc-redstone glow-redstone';
+      if (statusEl) { statusEl.textContent = statusText; statusEl.className = `font-mc text-xs text-center ${statusColour}`; }
+      if (scoreEl)  { scoreEl.className = `font-mc text-5xl leading-none ${statusColour}`; }
+
+      // Health bars
+      const bars: [string, number][] = [
+        ['health-bar-energy',   energyPct],
+        ['health-bar-machines', machinePct],
+        ['health-bar-storage',  storagePct],
+      ];
+      for (const [id, val] of bars) {
+        const bar = document.getElementById(id) as HTMLElement | null;
+        if (bar) bar.style.width = `${Math.min(100, val)}%`;
       }
 
       const el = document.getElementById('last-updated');

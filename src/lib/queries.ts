@@ -291,7 +291,63 @@ from(bucket: "${INFLUX_BUCKET}")
     .sort((a, b) => Number(b.active) - Number(a.active) || a.type.localeCompare(b.type));
 }
 
-// MI machines — active field is always 0 (broken upstream). Show type/count grouping only.
+// MI machines — now have inferred_active field (derived from occupied slots + energy)
+export interface MIMachine {
+  name: string;
+  type: string;
+  node: string;
+  active: boolean;           // inferred_active (for MI) or native active (fallback)
+  energy_percent: number;    // 0-100
+  occupied_slots?: number;
+  total_slots?: number;
+}
+
+export async function miMachines(): Promise<MIMachine[]> {
+  // Fetch machine_activity with inferred_active + energy_percent
+  const [activityRows, slotRows] = await Promise.all([
+    queryFlux(`
+from(bucket: "${INFLUX_BUCKET}")
+  |> range(start: -2m)
+  |> filter(fn: (r) => r._measurement == "machine_activity" and r.mod == "modern_industrialization")
+  |> last()
+  |> pivot(rowKey: ["_time", "name", "type", "mod", "node"], columnKey: ["_field"], valueColumn: "_value")
+`),
+    queryFlux(`
+from(bucket: "${INFLUX_BUCKET}")
+  |> range(start: -1m)
+  |> filter(fn: (r) => r._measurement == "mi_machine_slot_summary")
+  |> last()
+  |> pivot(rowKey: ["_time", "name", "type", "node"], columnKey: ["_field"], valueColumn: "_value")
+`),
+  ]);
+
+  // Build slot map keyed by machine name
+  const slotMap = new Map<string, { occupied: number; total: number }>();
+  for (const r of slotRows) {
+    const name = String(r.name ?? '');
+    slotMap.set(name, {
+      occupied: (r.occupied as number) ?? 0,
+      total: (r.slots as number) ?? 0,
+    });
+  }
+
+  return activityRows
+    .map(r => {
+      const name = String(r.name ?? '');
+      const slot = slotMap.get(name);
+      return {
+        name,
+        type: String(r.type ?? ''),
+        node: String(r.node ?? ''),
+        active: (r.inferred_active as number) > 0,
+        energy_percent: (r.energy_percent as number) ?? 0,
+        occupied_slots: slot?.occupied,
+        total_slots: slot?.total,
+      };
+    })
+    .sort((a, b) => Number(b.active) - Number(a.active) || a.type.localeCompare(b.type));
+}
+
 export interface MIMachineGroup {
   type: string;        // e.g. "modern_industrialization:assembler"
   label: string;       // short label without mod prefix
@@ -300,19 +356,12 @@ export interface MIMachineGroup {
 }
 
 export async function miMachineGroups(): Promise<MIMachineGroup[]> {
-  const rows = await queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -2m)
-  |> filter(fn: (r) => r._measurement == "machine_activity" and r.mod == "modern_industrialization")
-  |> filter(fn: (r) => r._field == "active")
-  |> last()
-`);
-
+  const machines = await miMachines();
   const groups: Record<string, { names: string[] }> = {};
-  for (const r of rows) {
-    const type = String(r.type ?? '');
-    if (!groups[type]) groups[type] = { names: [] };
-    groups[type]!.names.push(String(r.name ?? ''));
+  
+  for (const m of machines) {
+    if (!groups[m.type]) groups[m.type] = { names: [] };
+    groups[m.type]!.names.push(m.name);
   }
 
   return Object.entries(groups)
@@ -323,6 +372,34 @@ from(bucket: "${INFLUX_BUCKET}")
       names: names.sort(),
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+// MI machine fluids — latest levels per tank
+export interface MIMachineFluid {
+  name: string;
+  type: string;
+  fluid: string;
+  amount: number;
+  capacity: number;
+  percent: number;
+}
+
+export async function miMachineFluids(): Promise<MIMachineFluid[]> {
+  const rows = await queryFlux(`
+from(bucket: "${INFLUX_BUCKET}")
+  |> range(start: -1m)
+  |> filter(fn: (r) => r._measurement == "mi_machine_fluid")
+  |> last()
+  |> pivot(rowKey: ["_time", "name", "type", "node", "fluid"], columnKey: ["_field"], valueColumn: "_value")
+`);
+  return rows.map(r => ({
+    name: String(r.name ?? ''),
+    type: String(r.type ?? ''),
+    fluid: String(r.fluid ?? ''),
+    amount: (r.amount as number) ?? 0,
+    capacity: (r.capacity as number) ?? 0,
+    percent: (r.percent as number) ?? 0,
+  }));
 }
 
 export interface ItemVelocity {

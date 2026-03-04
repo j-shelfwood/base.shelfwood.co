@@ -2,22 +2,30 @@
 import Layout from '@/layouts/Layout.astro';
 import Panel from '@/components/mc/Panel.astro';
 import StatCard from '@/components/mc/StatCard.astro';
-import { machineSummary, machineTypes, mekanismMachines, miMachineGroups } from '@/lib/queries';
+import { machineSummary, machineTypes, mekanismMachines, miMachines, miMachineGroups } from '@/lib/queries';
 
-const [summaryRes, typesRes, mekanismRes, miRes] = await Promise.allSettled([
+const [summaryRes, typesRes, mekanismRes, miRes, miGroupsRes] = await Promise.allSettled([
   machineSummary(),
   machineTypes(),
   mekanismMachines(),
+  miMachines(),
   miMachineGroups(),
 ]);
 
 const summary    = summaryRes.status    === 'fulfilled' ? summaryRes.value    : null;
 const types      = typesRes.status      === 'fulfilled' ? typesRes.value      : [];
 const mekMachines = mekanismRes.status  === 'fulfilled' ? mekanismRes.value   : [];
-const miGroups   = miRes.status         === 'fulfilled' ? miRes.value         : [];
+const miMachines = miRes.status         === 'fulfilled' ? miRes.value         : [];
+const miGroups   = miGroupsRes.status   === 'fulfilled' ? miGroupsRes.value   : [];
 
 // Group Mekanism machines by type for the grid
 const mekByType = mekMachines.reduce<Record<string, typeof mekMachines>>((acc, m) => {
+  (acc[m.type] ??= []).push(m);
+  return acc;
+}, {});
+
+// Group MI machines by type for the grid
+const miByType = miMachines.reduce<Record<string, typeof miMachines>>((acc, m) => {
   (acc[m.type] ??= []).push(m);
   return acc;
 }, {});
@@ -169,31 +177,86 @@ function miColourFor(label: string): string {
 
   <!-- ── MI machine grid ───────────────────────────────────────────────────── -->
   <Panel title="MODERN INDUSTRIALIZATION" raised noPadding>
-    <div id="mi-grid" class="p-4">
-      {miGroups.length === 0 && (
+    <div id="mi-grid" class="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 items-start">
+      {Object.keys(miByType).length === 0 && (
         <p class="font-mc text-xs text-mc-muted py-2">No MI machine data</p>
       )}
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {miGroups.map(g => {
-          const col = miColourFor(g.label);
-          return (
-            <div
-              class={`pixel-border bg-mc-deepslate p-3 flex flex-col gap-1.5`}
-              data-mi-type={g.type}
-            >
-              <span class={`font-mc text-[10px] text-mc-${col} uppercase leading-tight`}>
-                {g.label}
+      {Object.entries(miByType).map(([type, machines]) => {
+        const active = machines.filter(m => m.active).length;
+        const col = miColourFor(type.replace('modern_industrialization:', '').replace(/_/g, ' '));
+        return (
+          <div data-type-group={type}>
+            <!-- Type header -->
+            <div class="flex items-center gap-3 mb-2">
+              <span class={`font-mc text-xs text-mc-${col} uppercase tracking-widest`}>
+                {type.replace('modern_industrialization:', '').replace(/_/g, ' ')}
               </span>
-              <div class="flex items-end justify-between mt-auto pt-1">
-                <span class="font-mc text-lg text-mc-white leading-none">{g.count}</span>
-                <span class="font-mc text-[8px] text-mc-muted">machines</span>
-              </div>
-              <!-- Faint accent bar -->
-              <div class={`h-0.5 bg-mc-${col}/40 mt-1`} />
+              <span class="font-mc text-xs text-mc-muted">
+                <span class="text-mc-emerald" data-active-count={type}>{active}</span>
+                /{machines.length}
+              </span>
             </div>
-          );
-        })}
-      </div>
+            <!-- Machine cells -->
+            <div class="flex flex-wrap gap-2">
+              {machines.map(m => (
+                <div
+                  class:list={[
+                    'machine-cell group relative cursor-default transition-all duration-300',
+                    'pixel-border w-14 h-14 flex flex-col items-center justify-center gap-0.5',
+                    m.active ? `bg-mc-${col}/20 border-mc-${col}` : 'bg-mc-stone/40',
+                  ]}
+                  data-machine={m.name}
+                  data-type={type}
+                  data-active={m.active ? '1' : '0'}
+                  data-energy={m.energy_percent.toFixed(0)}
+                  data-occupied={m.occupied_slots ?? 0}
+                  data-total-slots={m.total_slots ?? 0}
+                  title={`${m.name}`}
+                >
+                  <!-- Active glow pulse -->
+                  {m.active && (
+                    <div class={`absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none`} />
+                  )}
+                  <!-- Name (truncated) -->
+                  <span class={`font-mc text-[8px] leading-none z-10 px-0.5 text-center truncate w-full ${m.active ? `text-mc-${col}` : 'text-mc-muted'}`}>
+                    {m.name.replace(/_/g, ' ').replace(/modern industrialization /i, '').slice(0, 10)}
+                  </span>
+                  <!-- Status dot -->
+                  <span class:list={[
+                    'w-1.5 h-1.5 z-10',
+                    m.active ? 'bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]' : 'bg-mc-stone',
+                  ]} />
+                  <!-- Energy bar at bottom -->
+                  <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
+                    <div
+                      class="h-full bg-mc-gold transition-all duration-500"
+                      style={`width:${Math.min(100, m.energy_percent)}%`}
+                    />
+                  </div>
+                  <!-- Tooltip on hover -->
+                  <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
+                    <span class="font-mc text-[9px] text-mc-white capitalize">{m.name.replace(/_/g, ' ')}</span>
+                    <span class={`font-mc text-[9px] ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}`}>{m.active ? 'ACTIVE' : 'IDLE'}</span>
+                    <div class="flex items-center gap-1 mt-0.5">
+                      <span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span>
+                      <div class="flex-1 h-1.5 bg-mc-shadow">
+                        <div class="h-full bg-mc-gold" style={`width:${Math.min(100, m.energy_percent)}%`} />
+                      </div>
+                      <span class="font-mc text-[8px] text-mc-gold">{m.energy_percent.toFixed(0)}%</span>
+                    </div>
+                    {m.occupied_slots != null && m.total_slots != null && (
+                      <div class="flex items-center gap-1">
+                        <span class="font-mc text-[8px] text-mc-diamond w-10">SLOTS</span>
+                        <span class="font-mc text-[8px] text-mc-diamond">{m.occupied_slots}/{m.total_slots}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   </Panel>
 </Layout>
@@ -364,29 +427,131 @@ function miColourFor(label: string): string {
 
   // ── MI grid refresh ───────────────────────────────────────────────────────
 
-  type MIGroup = { type: string; label: string; count: number };
+  type MIMachine = {
+    name: string; type: string; active: boolean;
+    energy_percent: number; occupied_slots?: number; total_slots?: number;
+  };
 
-  function renderMIGrid(groups: MIGroup[]) {
-    const grid = document.querySelector('#mi-grid .grid') as HTMLElement | null;
-    if (!grid) return;
+  function renderMIGrid(machines: MIMachine[]) {
+    const container = document.getElementById('mi-grid');
+    if (!container) return;
 
-    for (const g of groups) {
-      let card = grid.querySelector(`[data-mi-type="${g.type}"]`) as HTMLElement | null;
-      if (!card) {
-        card = document.createElement('div');
-        grid.appendChild(card);
-      }
-      const col = miColourFor(g.label);
-      card.dataset.miType = g.type;
-      card.className = `pixel-border bg-mc-deepslate p-3 flex flex-col gap-1.5`;
-      card.innerHTML = `
-        <span class="font-mc text-[10px] text-mc-${col} uppercase leading-tight">${g.label}</span>
-        <div class="flex items-end justify-between mt-auto pt-1">
-          <span class="font-mc text-lg text-mc-white leading-none">${g.count}</span>
-          <span class="font-mc text-[8px] text-mc-muted">machines</span>
-        </div>
-        <div class="h-0.5 bg-mc-${col}/40 mt-1"></div>`;
+    if (machines.length === 0) {
+      container.innerHTML = '<p class="font-mc text-xs text-mc-muted py-2">No MI machine data</p>';
+      return;
     }
+
+    // Group by type
+    const byType: Record<string, MIMachine[]> = {};
+    for (const m of machines) {
+      (byType[m.type] ??= []).push(m);
+    }
+
+    // Build or patch each group
+    for (const [type, group] of Object.entries(byType)) {
+      let groupEl = container.querySelector(`[data-type-group="${type}"]`) as HTMLElement | null;
+      const active = group.filter(m => m.active).length;
+      const label = type.replace('modern_industrialization:', '').replace(/_/g, ' ');
+      const col = miColourFor(label);
+
+      if (!groupEl) {
+        // Create new group
+        groupEl = document.createElement('div');
+        groupEl.dataset.typeGroup = type;
+        container.appendChild(groupEl);
+      }
+
+      // Update header
+      const header = groupEl.querySelector('[data-active-count]');
+      if (header) header.textContent = String(active);
+
+      // Update individual cells
+      const cellsContainer = groupEl.querySelector('.flex.flex-wrap') as HTMLElement | null;
+      if (!cellsContainer) {
+        // Re-render whole group if structure missing
+        groupEl.innerHTML = buildMIGroupHTML(type, label, group, col, active);
+        continue;
+      }
+
+      for (const m of group) {
+        let cell = cellsContainer.querySelector(`[data-machine="${m.name}"]`) as HTMLElement | null;
+        const wasActive = cell?.dataset.active === '1';
+
+        if (!cell) {
+          cell = document.createElement('div');
+          cellsContainer.appendChild(cell);
+        }
+
+        const changed = wasActive !== m.active;
+
+        // Update data attrs
+        cell.dataset.active = m.active ? '1' : '0';
+        cell.dataset.energy = m.energy_percent.toFixed(0);
+        cell.dataset.occupied = String(m.occupied_slots ?? 0);
+        cell.dataset.totalSlots = String(m.total_slots ?? 0);
+
+        // Rebuild cell HTML
+        cell.innerHTML = buildMICellInner(m, col, label);
+        cell.className = [
+          'machine-cell group relative cursor-default transition-all duration-300',
+          'pixel-border w-14 h-14 flex flex-col items-center justify-center gap-0.5',
+          m.active ? `bg-mc-${col}/20` : 'bg-mc-stone/40',
+        ].join(' ');
+
+        // Flash animation on state change
+        if (changed) {
+          cell.classList.add(m.active ? 'animate-ping-once' : 'opacity-50');
+          setTimeout(() => {
+            cell!.classList.remove('animate-ping-once', 'opacity-50');
+          }, 600);
+        }
+      }
+    }
+  }
+
+  function buildMICellInner(m: MIMachine, col: string, label: string): string {
+    const shortName = m.name.replace(/_/g, ' ').replace(/modern industrialization /i, '').slice(0, 10);
+    const pctE = Math.min(100, m.energy_percent);
+    const slotsInfo = m.occupied_slots != null && m.total_slots != null
+      ? `<div class="flex items-center gap-1">
+           <span class="font-mc text-[8px] text-mc-diamond w-10">SLOTS</span>
+           <span class="font-mc text-[8px] text-mc-diamond">${m.occupied_slots}/${m.total_slots}</span>
+         </div>`
+      : '';
+    return `
+      ${m.active ? `<div class="absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none"></div>` : ''}
+      <span class="font-mc text-[8px] leading-none z-10 px-0.5 text-center w-full truncate ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">${shortName}</span>
+      <span class="w-1.5 h-1.5 z-10 ${m.active ? `bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]` : 'bg-mc-stone'}"></span>
+      <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
+        <div class="h-full bg-mc-gold transition-all duration-500" style="width:${pctE}%"></div>
+      </div>
+      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
+        <span class="font-mc text-[9px] text-mc-white capitalize">${m.name.replace(/_/g, ' ')}</span>
+        <span class="font-mc text-[9px] ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
+        <div class="flex items-center gap-1 mt-0.5">
+          <span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span>
+          <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${pctE}%"></div></div>
+          <span class="font-mc text-[8px] text-mc-gold">${pctE.toFixed(0)}%</span>
+        </div>
+        ${slotsInfo}
+      </div>`;
+  }
+
+  function buildMIGroupHTML(type: string, label: string, group: MIMachine[], col: string, active: number): string {
+    const cells = group.map(m => `
+      <div class="machine-cell group relative cursor-default transition-all duration-300 pixel-border w-14 h-14 flex flex-col items-center justify-center gap-0.5 ${m.active ? `bg-mc-${col}/20` : 'bg-mc-stone/40'}"
+           data-machine="${m.name}" data-type="${type}" data-active="${m.active ? 1 : 0}"
+           data-energy="${m.energy_percent.toFixed(0)}" data-occupied="${m.occupied_slots ?? 0}" data-total-slots="${m.total_slots ?? 0}">
+        ${buildMICellInner(m, col, label)}
+      </div>`).join('');
+    return `
+      <div class="flex items-center gap-3 mb-2">
+        <span class="font-mc text-xs text-mc-${col} uppercase tracking-widest">${label}</span>
+        <span class="font-mc text-xs text-mc-muted">
+          <span class="text-mc-emerald" data-active-count="${type}">${active}</span>/${group.length}
+        </span>
+      </div>
+      <div class="flex flex-wrap gap-2">${cells}</div>`;
   }
 
   // ── Poll ──────────────────────────────────────────────────────────────────
