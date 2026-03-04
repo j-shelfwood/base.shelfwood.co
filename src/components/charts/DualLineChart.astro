@@ -1,0 +1,141 @@
+---
+/**
+ * Overlaid dual-series SVG line chart.
+ * Renders two lines on the same axis with a shaded area between them.
+ */
+
+interface DataPoint {
+  time: string;
+  value: number;
+}
+
+interface Props {
+  dataA: DataPoint[];
+  dataB: DataPoint[];
+  colourA?: string;
+  colourB?: string;
+  labelA?: string;
+  labelB?: string;
+  height?: number;
+  suffix?: string;
+  id?: string;
+}
+
+const {
+  dataA,
+  dataB,
+  colourA = 'var(--color-mc-emerald)',
+  colourB = 'var(--color-mc-redstone)',
+  labelA = 'A',
+  labelB = 'B',
+  height = 100,
+  suffix = '',
+  id,
+} = Astro.props;
+
+const WIDTH = 600;
+const HEIGHT = height;
+const PAD = 4;
+
+function normalise(points: DataPoint[], minV: number, maxV: number) {
+  const range = maxV - minV || 1;
+  const total = points.length;
+  return points.map((p, i) => ({
+    x: PAD + (i / (total - 1 || 1)) * (WIDTH - PAD * 2),
+    y: PAD + (1 - (p.value - minV) / range) * (HEIGHT - PAD * 2),
+    v: p.value,
+  }));
+}
+
+const all = [...dataA.map(p => p.value), ...dataB.map(p => p.value)];
+const minV = all.length ? Math.min(...all) : 0;
+const maxV = all.length ? Math.max(...all) : 1;
+
+const ptsA = normalise(dataA, minV, maxV);
+const ptsB = normalise(dataB, minV, maxV);
+
+function toPath(pts: { x: number; y: number }[]) {
+  if (pts.length === 0) return '';
+  return `M ${pts.map(p => `${p.x},${p.y}`).join(' L ')}`;
+}
+
+// Shaded area between A and B (gen above con = surplus green, below = deficit red)
+function betweenFill(a: typeof ptsA, b: typeof ptsB, colWhen: string) {
+  if (a.length === 0 || b.length === 0) return null;
+  // Forward along A, backward along B
+  const fwd = a.map(p => `${p.x},${p.y}`).join(' L ');
+  const bwd = [...b].reverse().map(p => `${p.x},${p.y}`).join(' L ');
+  return { d: `M ${fwd} L ${bwd} Z`, col: colWhen };
+}
+
+const pathA = toPath(ptsA);
+const pathB = toPath(ptsB);
+const fill = betweenFill(ptsA, ptsB, 'var(--color-mc-emerald)');
+
+const lastA = dataA.at(-1)?.value ?? null;
+const lastB = dataB.at(-1)?.value ?? null;
+
+function fmt(n: number | null): string {
+  if (n == null) return '—';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return n.toFixed(0);
+}
+---
+
+<div class="flex flex-col gap-2" id={id}>
+  {all.length > 0 ? (
+    <>
+      <svg
+        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+        class="w-full"
+        style={`height: ${HEIGHT}px`}
+        aria-hidden="true"
+      >
+        <!-- Shaded between -->
+        {fill && (
+          <path d={fill.d} fill={fill.col} opacity="0.08" />
+        )}
+        <!-- Series B (consumption) -->
+        {pathB && (
+          <path d={pathB} fill="none" stroke={colourB} stroke-width="1.5"
+            stroke-linejoin="round" stroke-linecap="round" opacity="0.7" />
+        )}
+        <!-- Series A (generation) -->
+        {pathA && (
+          <path d={pathA} fill="none" stroke={colourA} stroke-width="2"
+            stroke-linejoin="round" stroke-linecap="round" />
+        )}
+        <!-- Current value dots -->
+        {ptsA.at(-1) && (
+          <circle cx={ptsA.at(-1)!.x} cy={ptsA.at(-1)!.y} r="3" fill={colourA} />
+        )}
+        {ptsB.at(-1) && (
+          <circle cx={ptsB.at(-1)!.x} cy={ptsB.at(-1)!.y} r="3" fill={colourB} />
+        )}
+      </svg>
+      <!-- Legend -->
+      <div class="flex items-center justify-between font-mc text-xs">
+        <div class="flex items-center gap-4">
+          <span class="flex items-center gap-1.5">
+            <span class="w-3 h-0.5 inline-block" style={`background:${colourA}`} />
+            <span style={`color:${colourA}`}>{labelA}</span>
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="w-3 h-0.5 inline-block" style={`background:${colourB}`} />
+            <span style={`color:${colourB}`}>{labelB}</span>
+          </span>
+        </div>
+        <div class="flex items-center gap-3 text-mc-muted">
+          <span style={`color:${colourA}`}>{fmt(lastA)}{suffix}</span>
+          <span class="text-mc-stone">/</span>
+          <span style={`color:${colourB}`}>{fmt(lastB)}{suffix}</span>
+        </div>
+      </div>
+    </>
+  ) : (
+    <div class="flex items-center justify-center font-mc text-xs text-mc-muted" style={`height:${HEIGHT}px`}>
+      NO DATA
+    </div>
+  )}
+</div>

@@ -3,7 +3,7 @@ import Layout from '@/layouts/Layout.astro';
 import Panel from '@/components/mc/Panel.astro';
 import StatCard from '@/components/mc/StatCard.astro';
 import ProgressBar from '@/components/mc/ProgressBar.astro';
-import LineChart from '@/components/charts/LineChart.astro';
+import DualLineChart from '@/components/charts/DualLineChart.astro';
 import { energySummary, energyFlow, aeSummary, aeCPUs, machineSummary, energyHistory, energyFlowHistory } from '@/lib/queries';
 
 const [energy, flow, ae, cpus, machines, energyHist, flowHist] = await Promise.allSettled([
@@ -41,6 +41,19 @@ const conHist = fHist.filter(r => r.name === conName);
 const genRate = f.find(r => r.name === genName)?.rate_fe_t ?? 0;
 const conRate = f.find(r => r.name === conName)?.rate_fe_t ?? 0;
 const netFlow = genRate - conRate;
+
+// Energy ETA: ticks → seconds (20 ticks/s)
+function energyEta(stored: number, capacity: number, netFePt: number): string {
+  if (Math.abs(netFePt) < 1) return 'STABLE';
+  const fe = netFePt > 0 ? (capacity - stored) : stored;
+  const seconds = fe / (Math.abs(netFePt) * 20);
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  if (seconds < 86400) return `${(seconds / 3600).toFixed(1)}h`;
+  return `${(seconds / 86400).toFixed(1)}d`;
+}
+const etaLabel = e ? (netFlow > 0 ? 'Full in' : 'Empty in') : '—';
+const etaValue = e ? energyEta(e.stored_fe, e.capacity_fe, netFlow) : '—';
 ---
 
 <Layout title="MC Base — Overview">
@@ -53,7 +66,7 @@ const netFlow = genRate - conRate;
   </div>
 
   <!-- ── Row 1: Headline stats ─────────────────────────────────────────────── -->
-  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+  <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
     <StatCard
       label="Energy Stored"
       value={fmt(e?.stored_fe)}
@@ -88,6 +101,12 @@ const netFlow = genRate - conRate;
       suffix=" FE/t"
       colour={netFlow >= 0 ? 'emerald' : 'redstone'}
       id="stat-net"
+    />
+    <StatCard
+      label={etaLabel}
+      value={etaValue}
+      colour={netFlow >= 0 ? 'emerald' : 'redstone'}
+      id="stat-eta"
     />
     <StatCard
       label="AE Items"
@@ -142,16 +161,17 @@ const netFlow = genRate - conRate;
   <!-- ── Row 3: Energy graphs ───────────────────────────────────────────────── -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
     <Panel title="GENERATION VS CONSUMPTION" class="lg:col-span-2" raised>
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <p class="font-mc text-xs text-mc-emerald mb-2">GENERATION</p>
-          <LineChart data={genHist} colour="var(--color-mc-emerald)" height={80} suffix=" FE/t" id="chart-gen" />
-        </div>
-        <div>
-          <p class="font-mc text-xs text-mc-redstone mb-2">CONSUMPTION</p>
-          <LineChart data={conHist} colour="var(--color-mc-redstone)" height={80} suffix=" FE/t" id="chart-con" />
-        </div>
-      </div>
+      <DualLineChart
+        dataA={genHist}
+        dataB={conHist}
+        colourA="var(--color-mc-emerald)"
+        colourB="var(--color-mc-redstone)"
+        labelA="Generation"
+        labelB="Consumption"
+        height={100}
+        suffix=" FE/t"
+        id="chart-gen-con"
+      />
     </Panel>
 
     <Panel title="ENERGY STORAGE %" raised>
@@ -215,9 +235,29 @@ const netFlow = genRate - conRate;
       if (eRes.flow && Array.isArray(eRes.flow) && eRes.flow.length >= 2) {
         const gen = eRes.flow[0]?.rate_fe_t ?? 0;
         const con = eRes.flow[1]?.rate_fe_t ?? 0;
+        const net = gen - con;
         setEl('stat-gen', fmt(gen) + ' FE/t');
         setEl('stat-con', fmt(con) + ' FE/t');
-        setEl('stat-net', fmt(gen - con) + ' FE/t');
+        setEl('stat-net', fmt(net) + ' FE/t');
+
+        // ETA
+        const stored = eRes.summary?.stored_fe ?? 0;
+        const capacity = eRes.summary?.capacity_fe ?? 0;
+        const etaEl = document.getElementById('stat-eta');
+        const etaLabelEl = etaEl?.closest('.mc-panel')?.querySelector('.font-mc.text-xs.text-mc-muted');
+        const eta = energyEta(stored, capacity, net);
+        if (etaEl) etaEl.textContent = eta;
+        if (etaLabelEl) etaLabelEl.textContent = net > 0 ? 'Full in' : net < 0 ? 'Empty in' : 'Stable';
+      }
+
+      function energyEta(stored: number, capacity: number, netFePt: number): string {
+        if (Math.abs(netFePt) < 1) return 'STABLE';
+        const fe = netFePt > 0 ? (capacity - stored) : stored;
+        const seconds = fe / (Math.abs(netFePt) * 20);
+        if (seconds < 60) return `${Math.round(seconds)}s`;
+        if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+        if (seconds < 86400) return `${(seconds / 3600).toFixed(1)}h`;
+        return `${(seconds / 86400).toFixed(1)}d`;
       }
       if (aeRes.summary) {
         const a = aeRes.summary;

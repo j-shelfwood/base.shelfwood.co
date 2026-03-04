@@ -3,15 +3,17 @@ import Layout from '@/layouts/Layout.astro';
 import Panel from '@/components/mc/Panel.astro';
 import StatCard from '@/components/mc/StatCard.astro';
 import ProgressBar from '@/components/mc/ProgressBar.astro';
-import { aeSummary, aeItems } from '@/lib/queries';
+import { aeSummary, aeItems, aeItemVelocity } from '@/lib/queries';
 
-const [summaryRes, itemsRes] = await Promise.allSettled([
+const [summaryRes, itemsRes, velocityRes] = await Promise.allSettled([
   aeSummary(),
   aeItems(),
+  aeItemVelocity('-30m', 15),
 ]);
 
-const summary = summaryRes.status === 'fulfilled' ? summaryRes.value : null;
-const items = itemsRes.status === 'fulfilled' ? itemsRes.value : [];
+const summary  = summaryRes.status  === 'fulfilled' ? summaryRes.value  : null;
+const items    = itemsRes.status    === 'fulfilled' ? itemsRes.value    : [];
+const velocity = velocityRes.status === 'fulfilled' ? velocityRes.value : [];
 
 function fmt(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
@@ -73,6 +75,63 @@ function itemLabel(registryName: string): string {
       />
     </div>
   )}
+
+  <!-- Top movers -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <div data-panel="producers">
+      <Panel title="TOP PRODUCERS · 30m" raised noPadding>
+        <div class="divide-y divide-mc-cobble/50">
+          {(() => {
+            const producers = velocity.filter(v => v.delta > 0);
+            const max = producers[0]?.delta ?? 1;
+            return producers.length > 0
+              ? producers.slice(0, 8).map(v => {
+                  const pct = Math.min(100, (v.delta / max) * 100);
+                  return (
+                    <div class="px-4 py-2 flex flex-col gap-1">
+                      <div class="flex items-center justify-between">
+                        <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(v.item)}</span>
+                        <span class="font-mc text-xs text-mc-emerald">+{fmt(v.delta)}</span>
+                      </div>
+                      <div class="mc-progress-track">
+                        <div class="mc-progress-fill" style={`width:${pct}%;background-color:var(--color-mc-emerald);opacity:0.6`} />
+                      </div>
+                    </div>
+                  );
+                })
+              : <p class="font-mc text-xs text-mc-muted px-4 py-4">No production detected</p>;
+          })()}
+        </div>
+      </Panel>
+    </div>
+
+    <div data-panel="consumers">
+      <Panel title="TOP CONSUMERS · 30m" raised noPadding>
+        <div class="divide-y divide-mc-cobble/50">
+          {(() => {
+            const consumers = velocity.filter(v => v.delta < 0);
+            const max = Math.abs(consumers[0]?.delta ?? 1);
+            return consumers.length > 0
+              ? consumers.slice(0, 8).map(v => {
+                  const pct = Math.min(100, (Math.abs(v.delta) / max) * 100);
+                  return (
+                    <div class="px-4 py-2 flex flex-col gap-1">
+                      <div class="flex items-center justify-between">
+                        <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(v.item)}</span>
+                        <span class="font-mc text-xs text-mc-redstone">{fmt(v.delta)}</span>
+                      </div>
+                      <div class="mc-progress-track">
+                        <div class="mc-progress-fill" style={`width:${pct}%;background-color:var(--color-mc-redstone);opacity:0.6`} />
+                      </div>
+                    </div>
+                  );
+                })
+              : <p class="font-mc text-xs text-mc-muted px-4 py-4">No consumption detected</p>;
+          })()}
+        </div>
+      </Panel>
+    </div>
+  </div>
 
   <!-- Item list -->
   <Panel title="ITEMS" raised noPadding>
@@ -184,6 +243,50 @@ function itemLabel(registryName: string): string {
     }, 300);
   });
 
-  // Auto-refresh
+  // Velocity refresh (every 2 min — 30m window, no need to hammer it)
+  async function loadVelocity() {
+    const data = await fetch('/api/ae-items?velocity=1').then(r => r.json()).catch(() => null);
+    if (!data?.velocity) return;
+
+    function renderVelocity(
+      selector: string,
+      items: { item: string; delta: number }[],
+      sign: 1 | -1,
+      colour: string,
+      emptyMsg: string
+    ) {
+      const panel = document.querySelector(selector) as HTMLElement | null;
+      if (!panel) return;
+      const container = panel.querySelector('.divide-y') as HTMLElement | null;
+      if (!container) return;
+      const filtered = items.filter(v => Math.sign(v.delta) === sign);
+      if (filtered.length === 0) {
+        container.innerHTML = `<p class="font-mc text-xs text-mc-muted px-4 py-4">${emptyMsg}</p>`;
+        return;
+      }
+      const max = Math.abs(filtered[0]?.delta ?? 1);
+      container.innerHTML = filtered.slice(0, 8).map(v => {
+        const pct = Math.min(100, (Math.abs(v.delta) / max) * 100);
+        const label = v.item.replace(/^.*:/, '').replace(/_/g, ' ');
+        const fmtDelta = sign === 1 ? `+${fmt(v.delta)}` : fmt(v.delta);
+        return `<div class="px-4 py-2 flex flex-col gap-1">
+          <div class="flex items-center justify-between">
+            <span class="font-mc text-xs text-mc-white capitalize">${label}</span>
+            <span class="font-mc text-xs ${colour}">${fmtDelta}</span>
+          </div>
+          <div class="mc-progress-track">
+            <div class="mc-progress-fill" style="width:${pct}%;background-color:${colour === 'text-mc-emerald' ? 'var(--color-mc-emerald)' : 'var(--color-mc-redstone)'};opacity:0.6"></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    renderVelocity('[data-panel="producers"]', data.velocity, 1,  'text-mc-emerald', 'No production detected');
+    renderVelocity('[data-panel="consumers"]', data.velocity, -1, 'text-mc-redstone', 'No consumption detected');
+  }
+
+  setInterval(loadVelocity, 120_000);
+
+  // Auto-refresh items
   setInterval(() => loadItems(currentQuery || undefined), REFRESH_MS);
 </script>

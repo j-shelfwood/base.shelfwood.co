@@ -325,6 +325,50 @@ from(bucket: "${INFLUX_BUCKET}")
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
+export interface ItemVelocity {
+  item: string;
+  delta: number;      // positive = net gain, negative = net loss
+  first: number;
+  last: number;
+}
+
+/** Top items by absolute delta over the last N minutes (default 30m). */
+export async function aeItemVelocity(range = '-30m', limit = 15): Promise<ItemVelocity[]> {
+  // We need first AND last per item — run two queries and diff
+  const [firstRows, lastRows] = await Promise.all([
+    queryFlux(`
+from(bucket: "${INFLUX_BUCKET}")
+  |> range(start: ${range})
+  |> filter(fn: (r) => r._measurement == "ae_item" and r._field == "count")
+  |> first()
+`),
+    queryFlux(`
+from(bucket: "${INFLUX_BUCKET}")
+  |> range(start: ${range})
+  |> filter(fn: (r) => r._measurement == "ae_item" and r._field == "count")
+  |> last()
+`),
+  ]);
+
+  const firstMap = new Map<string, number>();
+  for (const r of firstRows) firstMap.set(String(r.item ?? ''), (r._value as number) ?? 0);
+
+  const results: ItemVelocity[] = [];
+  for (const r of lastRows) {
+    const item = String(r.item ?? '');
+    const last = (r._value as number) ?? 0;
+    const first = firstMap.get(item) ?? last;
+    const delta = last - first;
+    if (Math.abs(delta) > 0) {
+      results.push({ item, delta, first, last });
+    }
+  }
+
+  return results
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, limit);
+}
+
 // ── Crafting ──────────────────────────────────────────────────────────────────
 
 export interface CraftingJob {
