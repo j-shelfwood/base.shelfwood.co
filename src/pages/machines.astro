@@ -2,7 +2,6 @@
 import Layout from '@/layouts/Layout.astro';
 import Panel from '@/components/mc/Panel.astro';
 import StatCard from '@/components/mc/StatCard.astro';
-import ProgressBar from '@/components/mc/ProgressBar.astro';
 import { machineSummary, machineTypes, mekanismMachines, miMachineGroups } from '@/lib/queries';
 
 const [summaryRes, typesRes, mekanismRes, miRes] = await Promise.allSettled([
@@ -12,196 +11,385 @@ const [summaryRes, typesRes, mekanismRes, miRes] = await Promise.allSettled([
   miMachineGroups(),
 ]);
 
-const summary = summaryRes.status === 'fulfilled' ? summaryRes.value : null;
-const types = typesRes.status === 'fulfilled' ? typesRes.value : [];
-const mekanismMachineList = mekanismRes.status === 'fulfilled' ? mekanismRes.value : [];
-const miGroups = miRes.status === 'fulfilled' ? miRes.value : [];
+const summary    = summaryRes.status    === 'fulfilled' ? summaryRes.value    : null;
+const types      = typesRes.status      === 'fulfilled' ? typesRes.value      : [];
+const mekMachines = mekanismRes.status  === 'fulfilled' ? mekanismRes.value   : [];
+const miGroups   = miRes.status         === 'fulfilled' ? miRes.value         : [];
+
+// Group Mekanism machines by type for the grid
+const mekByType = mekMachines.reduce<Record<string, typeof mekMachines>>((acc, m) => {
+  (acc[m.type] ??= []).push(m);
+  return acc;
+}, {});
+
+// Colour per machine type category
+const typeColour: Record<string, string> = {
+  enrichment_chamber:    'copper',
+  crusher:               'copper',
+  purification_chamber:  'copper',
+  energized_smelter:     'gold',
+  osmium_compressor:     'gold',
+  combiner:              'gold',
+  metallurgic_infuser:   'amethyst',
+  chemical_infuser:      'amethyst',
+  chemical_injection_chamber: 'amethyst',
+  electrolytic_separator: 'diamond',
+  solar_neutron_activator: 'diamond',
+  isotopic_centrifuge:   'diamond',
+  precision_sawmill:     'emerald',
+};
+
+function colourFor(type: string): string {
+  return typeColour[type] ?? 'white';
+}
+
+// MI category → colour mapping
+const miTypeColour: Record<string, string> = {
+  assembler:    'amethyst',
+  macerator:    'copper',
+  compressor:   'gold',
+  mixer:        'diamond',
+  furnace:      'gold',
+  electrolyzer: 'diamond',
+  centrifuge:   'emerald',
+  cutting_machine: 'copper',
+  packer:       'white',
+  unpacker:     'white',
+};
+
+function miColourFor(label: string): string {
+  const key = label.replace(/ /g, '_');
+  return miTypeColour[key] ?? 'white';
+}
 ---
 
 <Layout title="MC Base — Machines">
-  <div class="mb-6">
-    <h1 class="font-mc text-mc-white text-xl">MACHINES</h1>
-    <p class="font-mc text-xs text-mc-muted mt-1">MEKANISM ACTIVITY · MI MACHINE GROUPS</p>
+  <div class="mb-6 flex items-end justify-between">
+    <div>
+      <h1 class="font-mc text-mc-white text-xl">MACHINES</h1>
+      <p class="font-mc text-xs text-mc-muted mt-1">MEKANISM · MODERN INDUSTRIALIZATION</p>
+    </div>
+    <span id="last-updated" class="font-mc text-xs text-mc-muted"></span>
   </div>
 
   <!-- Summary stats -->
   <div class="grid grid-cols-3 gap-3 mb-6">
-    <StatCard
-      label="Active"
-      value={summary?.active_machines ?? '—'}
-      colour="emerald"
-      id="stat-active"
-    />
-    <StatCard
-      label="Total"
-      value={summary?.total_machines ?? '—'}
-      colour="white"
-      id="stat-total"
-    />
-    <StatCard
-      label="Active %"
-      value={summary ? summary.active_percent.toFixed(1) + '%' : '—'}
-      colour={summary && summary.active_percent > 50 ? 'emerald' : 'copper'}
-      id="stat-active-pct"
-    />
+    <StatCard label="Active"    value={summary?.active_machines ?? '—'}                                                  colour="emerald" id="stat-active" />
+    <StatCard label="Total"     value={summary?.total_machines  ?? '—'}                                                  colour="white"   id="stat-total" />
+    <StatCard label="Active %"  value={summary ? summary.active_percent.toFixed(1) + '%' : '—'}
+      colour={summary && summary.active_percent > 50 ? 'emerald' : 'copper'} id="stat-active-pct" />
   </div>
 
-  <!-- Mekanism machines -->
+  <!-- ── Mekanism grid ─────────────────────────────────────────────────────── -->
   <Panel title="MEKANISM MACHINES" raised noPadding class="mb-6">
-    <div id="mek-list">
-      {mekanismMachineList.length === 0 && (
-        <p class="font-mc text-xs text-mc-muted px-4 py-6">No Mekanism machine data</p>
+    <div id="mek-grid" class="p-4 flex flex-col gap-5">
+      {Object.keys(mekByType).length === 0 && (
+        <p class="font-mc text-xs text-mc-muted py-2">No Mekanism machine data</p>
       )}
-      {mekanismMachineList.map(m => (
-        <div class="px-4 py-3 border-b border-mc-cobble/50 last:border-0">
-          <div class="flex items-center justify-between mb-2">
-            <div class="flex flex-col gap-0.5">
-              <span class="font-mc text-xs text-mc-white capitalize">{m.name}</span>
-              <span class="font-mc text-xs text-mc-muted">{m.type}</span>
+      {Object.entries(mekByType).map(([type, machines]) => {
+        const active = machines.filter(m => m.active).length;
+        const col = colourFor(type);
+        return (
+          <div data-type-group={type}>
+            <!-- Type header -->
+            <div class="flex items-center gap-3 mb-2">
+              <span class={`font-mc text-xs text-mc-${col} uppercase tracking-widest`}>
+                {type.replace(/_/g, ' ')}
+              </span>
+              <span class="font-mc text-xs text-mc-muted">
+                <span class="text-mc-emerald" data-active-count={type}>{active}</span>
+                /{machines.length}
+              </span>
             </div>
-            <span class:list={[
-              'font-mc text-xs px-2 py-0.5',
-              m.active ? 'text-mc-emerald' : 'text-mc-muted'
-            ]}>
-              {m.active ? 'ACTIVE' : 'IDLE'}
-            </span>
+            <!-- Machine cells -->
+            <div class="flex flex-wrap gap-2">
+              {machines.map(m => (
+                <div
+                  class:list={[
+                    'machine-cell group relative cursor-default transition-all duration-300',
+                    'pixel-border w-14 h-14 flex flex-col items-center justify-center gap-0.5',
+                    m.active ? `bg-mc-${col}/20 border-mc-${col}` : 'bg-mc-stone/40',
+                  ]}
+                  data-machine={m.name}
+                  data-type={type}
+                  data-active={m.active ? '1' : '0'}
+                  data-energy={m.energy_percent.toFixed(0)}
+                  data-progress={m.progress_percent.toFixed(0)}
+                  title={`${m.name}`}
+                >
+                  <!-- Active glow pulse -->
+                  {m.active && (
+                    <div class={`absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none`} />
+                  )}
+                  <!-- Name (truncated) -->
+                  <span class={`font-mc text-[8px] leading-none z-10 px-0.5 text-center truncate w-full text-center ${m.active ? `text-mc-${col}` : 'text-mc-muted'}`}>
+                    {m.name.replace(/_/g, ' ').replace(/mekanism /i, '').slice(0, 10)}
+                  </span>
+                  <!-- Status dot -->
+                  <span class:list={[
+                    'w-1.5 h-1.5 z-10',
+                    m.active ? 'bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]' : 'bg-mc-stone',
+                  ]} />
+                  <!-- Energy bar at bottom -->
+                  <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
+                    <div
+                      class="h-full bg-mc-gold transition-all duration-500"
+                      style={`width:${Math.min(100, m.energy_percent)}%`}
+                    />
+                  </div>
+                  <!-- Tooltip on hover -->
+                  <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
+                    <span class="font-mc text-[9px] text-mc-white capitalize">{m.name.replace(/_/g, ' ')}</span>
+                    <span class={`font-mc text-[9px] ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}`}>{m.active ? 'ACTIVE' : 'IDLE'}</span>
+                    <div class="flex items-center gap-1 mt-0.5">
+                      <span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span>
+                      <div class="flex-1 h-1.5 bg-mc-shadow">
+                        <div class="h-full bg-mc-gold" style={`width:${Math.min(100, m.energy_percent)}%`} />
+                      </div>
+                      <span class="font-mc text-[8px] text-mc-gold">{m.energy_percent.toFixed(0)}%</span>
+                    </div>
+                    {m.active && m.progress_total > 0 && (
+                      <div class="flex items-center gap-1">
+                        <span class="font-mc text-[8px] text-mc-amethyst w-10">PROG</span>
+                        <div class="flex-1 h-1.5 bg-mc-shadow">
+                          <div class="h-full bg-mc-amethyst" style={`width:${Math.min(100, m.progress_percent)}%`} />
+                        </div>
+                        <span class="font-mc text-[8px] text-mc-amethyst">{m.progress_percent.toFixed(0)}%</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          {m.active && (
-            <div class="flex flex-col gap-1.5">
-              <ProgressBar
-                value={m.progress_percent}
-                colour="amethyst"
-                label={`Progress: ${m.progress}/${m.progress_total}`}
-                showPercent
-              />
-              <ProgressBar
-                value={m.energy_percent}
-                colour="gold"
-                label="Energy"
-                showPercent
-              />
-            </div>
-          )}
-          {!m.active && (
-            <ProgressBar
-              value={m.energy_percent}
-              colour="gold"
-              label="Energy"
-              showPercent
-            />
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   </Panel>
 
-  <!-- MI machine groups + type breakdown -->
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-    <Panel title="MODERN INDUSTRIALIZATION" raised noPadding>
-      <div id="mi-list">
-        {miGroups.length === 0 && (
-          <p class="font-mc text-xs text-mc-muted px-4 py-6">No MI machine data</p>
-        )}
-        {miGroups.map(g => (
-          <div class="flex items-center justify-between px-4 py-2 border-b border-mc-cobble/50 last:border-0">
-            <span class="font-mc text-xs text-mc-white capitalize">{g.label}</span>
-            <span class="font-mc text-xs text-mc-diamond">{g.count}×</span>
-          </div>
-        ))}
-      </div>
-    </Panel>
-
-    <Panel title="BY TYPE" raised>
-      <div class="flex flex-col gap-3" id="type-table">
-        {types.length === 0 && (
-          <span class="font-mc text-xs text-mc-muted">No machine data</span>
-        )}
-        {types.map(t => (
-          <div class="flex flex-col gap-1">
-            <div class="flex items-center justify-between">
-              <span class="font-mc text-xs text-mc-white capitalize">{t.type.replace(/_/g, ' ')}</span>
-              <span class="font-mc text-xs text-mc-muted">{t.mod.replace('modern_industrialization', 'MI').replace('mekanism', 'MEK')}</span>
+  <!-- ── MI machine grid ───────────────────────────────────────────────────── -->
+  <Panel title="MODERN INDUSTRIALIZATION" raised noPadding>
+    <div id="mi-grid" class="p-4">
+      {miGroups.length === 0 && (
+        <p class="font-mc text-xs text-mc-muted py-2">No MI machine data</p>
+      )}
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {miGroups.map(g => {
+          const col = miColourFor(g.label);
+          return (
+            <div
+              class={`pixel-border bg-mc-deepslate p-3 flex flex-col gap-1.5`}
+              data-mi-type={g.type}
+            >
+              <span class={`font-mc text-[10px] text-mc-${col} uppercase leading-tight`}>
+                {g.label}
+              </span>
+              <div class="flex items-end justify-between mt-auto pt-1">
+                <span class="font-mc text-lg text-mc-white leading-none">{g.count}</span>
+                <span class="font-mc text-[8px] text-mc-muted">machines</span>
+              </div>
+              <!-- Faint accent bar -->
+              <div class={`h-0.5 bg-mc-${col}/40 mt-1`} />
             </div>
-            <ProgressBar
-              value={t.active_count}
-              max={t.total_count}
-              colour={t.active_percent > 50 ? 'emerald' : 'copper'}
-              label={`${t.active_count}/${t.total_count} active`}
-            />
-          </div>
-        ))}
+          );
+        })}
       </div>
-    </Panel>
-  </div>
+    </div>
+  </Panel>
 </Layout>
 
 <script>
-  const REFRESH_MS = 10_000;
+  const REFRESH_MS = 8_000;
+
+  // ── helpers ────────────────────────────────────────────────────────────────
 
   function setEl(id: string, val: string) {
     const el = document.getElementById(id);
     if (el) el.textContent = val;
   }
 
-  function renderMekanism(machines: {
+  const COLOURS: Record<string, string> = {
+    enrichment_chamber:    'copper',
+    crusher:               'copper',
+    purification_chamber:  'copper',
+    energized_smelter:     'gold',
+    osmium_compressor:     'gold',
+    combiner:              'gold',
+    metallurgic_infuser:   'amethyst',
+    chemical_infuser:      'amethyst',
+    chemical_injection_chamber: 'amethyst',
+    electrolytic_separator: 'diamond',
+    solar_neutron_activator: 'diamond',
+    isotopic_centrifuge:   'diamond',
+    precision_sawmill:     'emerald',
+  };
+
+  const MI_COLOURS: Record<string, string> = {
+    assembler: 'amethyst', macerator: 'copper', compressor: 'gold',
+    mixer: 'diamond', furnace: 'gold', electrolyzer: 'diamond',
+    centrifuge: 'emerald', cutting_machine: 'copper', packer: 'white', unpacker: 'white',
+  };
+
+  function colourFor(type: string) { return COLOURS[type] ?? 'white'; }
+  function miColourFor(label: string) { return MI_COLOURS[label.replace(/ /g, '_')] ?? 'white'; }
+
+  // ── Mekanism grid refresh ─────────────────────────────────────────────────
+
+  type MekMachine = {
     name: string; type: string; active: boolean;
     energy_percent: number; progress: number; progress_total: number; progress_percent: number;
-  }[]) {
-    const list = document.getElementById('mek-list');
-    if (!list) return;
-    list.innerHTML = machines.length === 0
-      ? '<p class="font-mc text-xs text-mc-muted px-4 py-6">No Mekanism machine data</p>'
-      : machines.map(m => {
-          const pctE = Math.min(100, Math.max(0, m.energy_percent));
-          const pctP = Math.min(100, Math.max(0, m.progress_percent));
-          const progressBar = m.active ? `
-            <div class="flex flex-col gap-1 mt-2">
-              <div class="flex justify-between">
-                <span class="font-mc text-xs text-mc-muted">Progress: ${m.progress}/${m.progress_total}</span>
-                <span class="font-mc text-xs text-mc-white">${pctP.toFixed(1)}%</span>
-              </div>
-              <div class="mc-progress-track">
-                <div class="mc-progress-fill" style="width:${pctP}%;background-color:var(--color-mc-amethyst)">
-                  <span class="absolute inset-0 top-0 bottom-1/2 bg-white/20"></span>
-                </div>
-              </div>
-            </div>` : '';
-          return `
-            <div class="px-4 py-3 border-b border-mc-cobble/50 last:border-0">
-              <div class="flex items-center justify-between mb-2">
-                <div class="flex flex-col gap-0.5">
-                  <span class="font-mc text-xs text-mc-white capitalize">${m.name}</span>
-                  <span class="font-mc text-xs text-mc-muted">${m.type}</span>
-                </div>
-                <span class="font-mc text-xs px-2 py-0.5 ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
-              </div>
-              ${progressBar}
-              <div class="flex flex-col gap-1 mt-1">
-                <div class="flex justify-between">
-                  <span class="font-mc text-xs text-mc-muted">Energy</span>
-                  <span class="font-mc text-xs text-mc-white">${pctE.toFixed(1)}%</span>
-                </div>
-                <div class="mc-progress-track">
-                  <div class="mc-progress-fill" style="width:${pctE}%;background-color:var(--color-mc-gold)">
-                    <span class="absolute inset-0 top-0 bottom-1/2 bg-white/20"></span>
-                  </div>
-                </div>
-              </div>
-            </div>`;
-        }).join('');
+  };
+
+  function renderMekGrid(machines: MekMachine[]) {
+    const container = document.getElementById('mek-grid');
+    if (!container) return;
+
+    if (machines.length === 0) {
+      container.innerHTML = '<p class="font-mc text-xs text-mc-muted py-2">No Mekanism machine data</p>';
+      return;
+    }
+
+    // Group by type
+    const byType: Record<string, MekMachine[]> = {};
+    for (const m of machines) {
+      (byType[m.type] ??= []).push(m);
+    }
+
+    // Build or patch each group
+    for (const [type, group] of Object.entries(byType)) {
+      let groupEl = container.querySelector(`[data-type-group="${type}"]`) as HTMLElement | null;
+      const active = group.filter(m => m.active).length;
+      const col = colourFor(type);
+
+      if (!groupEl) {
+        // Create new group
+        groupEl = document.createElement('div');
+        groupEl.dataset.typeGroup = type;
+        container.appendChild(groupEl);
+      }
+
+      // Update header
+      const header = groupEl.querySelector('[data-active-count]');
+      if (header) header.textContent = String(active);
+
+      // Update individual cells
+      const cellsContainer = groupEl.querySelector('.flex.flex-wrap') as HTMLElement | null;
+      if (!cellsContainer) {
+        // Re-render whole group if structure missing
+        groupEl.innerHTML = buildGroupHTML(type, group, col, active);
+        continue;
+      }
+
+      for (const m of group) {
+        let cell = cellsContainer.querySelector(`[data-machine="${m.name}"]`) as HTMLElement | null;
+        const wasActive = cell?.dataset.active === '1';
+
+        if (!cell) {
+          cell = document.createElement('div');
+          cellsContainer.appendChild(cell);
+        }
+
+        const changed = wasActive !== m.active;
+
+        // Update data attrs
+        cell.dataset.active = m.active ? '1' : '0';
+        cell.dataset.energy = m.energy_percent.toFixed(0);
+        cell.dataset.progress = m.progress_percent.toFixed(0);
+
+        // Rebuild cell HTML (small enough to be cheap)
+        cell.innerHTML = buildCellInner(m, col);
+        cell.className = [
+          'machine-cell group relative cursor-default transition-all duration-300',
+          'pixel-border w-14 h-14 flex flex-col items-center justify-center gap-0.5',
+          m.active ? `bg-mc-${col}/20` : 'bg-mc-stone/40',
+        ].join(' ');
+
+        // Flash animation on state change
+        if (changed) {
+          cell.classList.add(m.active ? 'animate-ping-once' : 'opacity-50');
+          setTimeout(() => {
+            cell!.classList.remove('animate-ping-once', 'opacity-50');
+          }, 600);
+        }
+      }
+    }
   }
 
-  function renderMI(groups: { type: string; label: string; count: number }[]) {
-    const list = document.getElementById('mi-list');
-    if (!list) return;
-    list.innerHTML = groups.length === 0
-      ? '<p class="font-mc text-xs text-mc-muted px-4 py-6">No MI machine data</p>'
-      : groups.map(g => `
-          <div class="flex items-center justify-between px-4 py-2 border-b border-mc-cobble/50 last:border-0">
-            <span class="font-mc text-xs text-mc-white capitalize">${g.label}</span>
-            <span class="font-mc text-xs text-mc-diamond">${g.count}×</span>
-          </div>`).join('');
+  function buildCellInner(m: MekMachine, col: string): string {
+    const shortName = m.name.replace(/_/g, ' ').replace(/mekanism /i, '').slice(0, 10);
+    const pctE = Math.min(100, m.energy_percent);
+    const pctP = Math.min(100, m.progress_percent);
+    const progressBar = m.active && m.progress_total > 0
+      ? `<div class="flex items-center gap-1">
+           <span class="font-mc text-[8px] text-mc-amethyst w-10">PROG</span>
+           <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-amethyst" style="width:${pctP}%"></div></div>
+           <span class="font-mc text-[8px] text-mc-amethyst">${pctP.toFixed(0)}%</span>
+         </div>`
+      : '';
+    return `
+      ${m.active ? `<div class="absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none"></div>` : ''}
+      <span class="font-mc text-[8px] leading-none z-10 px-0.5 text-center w-full truncate ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">${shortName}</span>
+      <span class="w-1.5 h-1.5 z-10 ${m.active ? `bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]` : 'bg-mc-stone'}"></span>
+      <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
+        <div class="h-full bg-mc-gold transition-all duration-500" style="width:${pctE}%"></div>
+      </div>
+      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
+        <span class="font-mc text-[9px] text-mc-white capitalize">${m.name.replace(/_/g, ' ')}</span>
+        <span class="font-mc text-[9px] ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
+        <div class="flex items-center gap-1 mt-0.5">
+          <span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span>
+          <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${pctE}%"></div></div>
+          <span class="font-mc text-[8px] text-mc-gold">${pctE.toFixed(0)}%</span>
+        </div>
+        ${progressBar}
+      </div>`;
   }
+
+  function buildGroupHTML(type: string, group: MekMachine[], col: string, active: number): string {
+    const cells = group.map(m => `
+      <div class="machine-cell group relative cursor-default transition-all duration-300 pixel-border w-14 h-14 flex flex-col items-center justify-center gap-0.5 ${m.active ? `bg-mc-${col}/20` : 'bg-mc-stone/40'}"
+           data-machine="${m.name}" data-type="${type}" data-active="${m.active ? 1 : 0}"
+           data-energy="${m.energy_percent.toFixed(0)}" data-progress="${m.progress_percent.toFixed(0)}">
+        ${buildCellInner(m, col)}
+      </div>`).join('');
+    return `
+      <div class="flex items-center gap-3 mb-2">
+        <span class="font-mc text-xs text-mc-${col} uppercase tracking-widest">${type.replace(/_/g, ' ')}</span>
+        <span class="font-mc text-xs text-mc-muted">
+          <span class="text-mc-emerald" data-active-count="${type}">${active}</span>/${group.length}
+        </span>
+      </div>
+      <div class="flex flex-wrap gap-2">${cells}</div>`;
+  }
+
+  // ── MI grid refresh ───────────────────────────────────────────────────────
+
+  type MIGroup = { type: string; label: string; count: number };
+
+  function renderMIGrid(groups: MIGroup[]) {
+    const grid = document.querySelector('#mi-grid .grid') as HTMLElement | null;
+    if (!grid) return;
+
+    for (const g of groups) {
+      let card = grid.querySelector(`[data-mi-type="${g.type}"]`) as HTMLElement | null;
+      if (!card) {
+        card = document.createElement('div');
+        grid.appendChild(card);
+      }
+      const col = miColourFor(g.label);
+      card.dataset.miType = g.type;
+      card.className = `pixel-border bg-mc-deepslate p-3 flex flex-col gap-1.5`;
+      card.innerHTML = `
+        <span class="font-mc text-[10px] text-mc-${col} uppercase leading-tight">${g.label}</span>
+        <div class="flex items-end justify-between mt-auto pt-1">
+          <span class="font-mc text-lg text-mc-white leading-none">${g.count}</span>
+          <span class="font-mc text-[8px] text-mc-muted">machines</span>
+        </div>
+        <div class="h-0.5 bg-mc-${col}/40 mt-1"></div>`;
+    }
+  }
+
+  // ── Poll ──────────────────────────────────────────────────────────────────
 
   async function refresh() {
     try {
@@ -211,11 +399,11 @@ const miGroups = miRes.status === 'fulfilled' ? miRes.value : [];
       if (data.summary) {
         const s = data.summary;
         setEl('stat-active', String(s.active_machines));
-        setEl('stat-total', String(s.total_machines));
+        setEl('stat-total',  String(s.total_machines));
         setEl('stat-active-pct', s.active_percent.toFixed(1) + '%');
       }
-      if (data.mekanism) renderMekanism(data.mekanism);
-      if (data.mi) renderMI(data.mi);
+      if (data.mekanism) renderMekGrid(data.mekanism);
+      if (data.mi)       renderMIGrid(data.mi);
 
       const lu = document.getElementById('last-updated');
       if (lu) lu.textContent = `UPDATED ${new Date().toLocaleTimeString()}`;
@@ -225,4 +413,5 @@ const miGroups = miRes.status === 'fulfilled' ? miRes.value : [];
   }
 
   setInterval(refresh, REFRESH_MS);
+  refresh(); // immediate first update
 </script>
