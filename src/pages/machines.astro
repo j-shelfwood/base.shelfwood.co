@@ -2,21 +2,19 @@
 import Layout from '@/layouts/Layout.astro';
 import Panel from '@/components/mc/Panel.astro';
 import StatCard from '@/components/mc/StatCard.astro';
-import { machineSummary, machineTypes, mekanismMachines, miMachines, miMachineGroups } from '@/lib/queries';
+import { machineSummary, machineTypes, mekanismMachines, miMachines as fetchMiMachines } from '@/lib/queries';
 
-const [summaryRes, typesRes, mekanismRes, miRes, miGroupsRes] = await Promise.allSettled([
+const [summaryRes, typesRes, mekanismRes, miRes] = await Promise.allSettled([
   machineSummary(),
   machineTypes(),
   mekanismMachines(),
-  miMachines(),
-  miMachineGroups(),
+  fetchMiMachines(),
 ]);
 
-const summary    = summaryRes.status    === 'fulfilled' ? summaryRes.value    : null;
-const types      = typesRes.status      === 'fulfilled' ? typesRes.value      : [];
-const mekMachines = mekanismRes.status  === 'fulfilled' ? mekanismRes.value   : [];
-const miMachines = miRes.status         === 'fulfilled' ? miRes.value         : [];
-const miGroups   = miGroupsRes.status   === 'fulfilled' ? miGroupsRes.value   : [];
+const summary     = summaryRes.status  === 'fulfilled' ? summaryRes.value  : null;
+const types       = typesRes.status    === 'fulfilled' ? typesRes.value    : [];
+const mekMachines = mekanismRes.status === 'fulfilled' ? mekanismRes.value : [];
+const miMachineList = miRes.status     === 'fulfilled' ? miRes.value       : [];
 
 // Group Mekanism machines by type for the grid
 const mekByType = mekMachines.reduce<Record<string, typeof mekMachines>>((acc, m) => {
@@ -25,7 +23,7 @@ const mekByType = mekMachines.reduce<Record<string, typeof mekMachines>>((acc, m
 }, {});
 
 // Group MI machines by type for the grid
-const miByType = miMachines.reduce<Record<string, typeof miMachines>>((acc, m) => {
+const miByType = miMachineList.reduce<Record<string, typeof miMachineList>>((acc, m) => {
   (acc[m.type] ??= []).push(m);
   return acc;
 }, {});

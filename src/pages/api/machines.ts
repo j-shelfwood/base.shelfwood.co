@@ -1,17 +1,16 @@
 import type { APIRoute } from 'astro';
-import { machineSummary, machineTypes, mekanismMachines, miMachines, miMachineGroups } from '@/lib/queries';
+import { machineSummary, machineTypes, mekanismMachines, miMachines } from '@/lib/queries';
 
 export const GET: APIRoute = async () => {
   try {
-    const [summary, types, mekanism, mi, miGroups] = await Promise.all([
+    const [summary, types, mekanism, mi] = await Promise.all([
       machineSummary(),
       machineTypes(),
       mekanismMachines(),
       miMachines(),
-      miMachineGroups(),
     ]);
 
-    return Response.json({ summary, types, mekanism, mi, miGroups });
+    return Response.json({ summary, types, mekanism, mi });
   } catch (err) {
     console.error('machines API error', err);
     return Response.json(
