@@ -118,6 +118,10 @@ function fmtBytes(b: number): string {
     </Panel>
 
     <!-- Active jobs -->
+    <div class="flex items-center gap-1 mb-2">
+      <button id="sort-jobs-pct"  class="mc-slot px-3 py-1.5 font-mc text-xs text-mc-amethyst">COMPLETION ▼</button>
+      <button id="sort-jobs-name" class="mc-slot px-3 py-1.5 font-mc text-xs text-mc-muted">ITEM</button>
+    </div>
     <Panel title="ACTIVE CRAFTING JOBS" raised noPadding>
       <div id="job-list">
         {jobs.length === 0 && (
@@ -149,6 +153,10 @@ function fmtBytes(b: number): string {
 <script>
   const REFRESH_MS = 5_000;
 
+  let jobSortMode: 'completion' | 'name' = 'completion';
+  let jobSortDir: 'desc' | 'asc' = 'desc';
+  let lastJobs: { item: string; cpu: string; quantity: number; crafted: number; completion: number }[] = [];
+
   function itemLabel(name: string): string {
     return name.replace(/^.*:/, '').replace(/_/g, ' ');
   }
@@ -163,6 +171,53 @@ function fmtBytes(b: number): string {
     const el = document.getElementById(id);
     if (el) el.textContent = val;
   }
+
+  function sortJobs<T extends { item: string; completion: number }>(jobs: T[]): T[] {
+    const copy = [...jobs];
+    if (jobSortMode === 'name') {
+      copy.sort((a, b) => {
+        const cmp = itemLabel(a.item).localeCompare(itemLabel(b.item));
+        return jobSortDir === 'asc' ? cmp : -cmp;
+      });
+    } else {
+      copy.sort((a, b) => jobSortDir === 'desc' ? b.completion - a.completion : a.completion - b.completion);
+    }
+    return copy;
+  }
+
+  function updateJobSortButtons() {
+    const btnPct  = document.getElementById('sort-jobs-pct');
+    const btnName = document.getElementById('sort-jobs-name');
+    if (btnPct) {
+      const arrow = jobSortMode === 'completion' ? (jobSortDir === 'desc' ? ' ▼' : ' ▲') : '';
+      btnPct.textContent = 'COMPLETION' + arrow;
+      btnPct.className = `mc-slot px-3 py-1.5 font-mc text-xs ${jobSortMode === 'completion' ? 'text-mc-amethyst' : 'text-mc-muted'}`;
+    }
+    if (btnName) {
+      const arrow = jobSortMode === 'name' ? (jobSortDir === 'asc' ? ' ▲' : ' ▼') : '';
+      btnName.textContent = 'ITEM' + arrow;
+      btnName.className = `mc-slot px-3 py-1.5 font-mc text-xs ${jobSortMode === 'name' ? 'text-mc-amethyst' : 'text-mc-muted'}`;
+    }
+  }
+
+  document.getElementById('sort-jobs-pct')?.addEventListener('click', () => {
+    if (jobSortMode === 'completion') {
+      jobSortDir = jobSortDir === 'desc' ? 'asc' : 'desc';
+    } else {
+      jobSortMode = 'completion'; jobSortDir = 'desc';
+    }
+    updateJobSortButtons();
+    renderJobs(lastJobs);
+  });
+  document.getElementById('sort-jobs-name')?.addEventListener('click', () => {
+    if (jobSortMode === 'name') {
+      jobSortDir = jobSortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      jobSortMode = 'name'; jobSortDir = 'asc';
+    }
+    updateJobSortButtons();
+    renderJobs(lastJobs);
+  });
 
   type CPU = { name: string; storage: number; coProcessors: number; busy: boolean };
 
@@ -235,6 +290,7 @@ function fmtBytes(b: number): string {
   }
 
   function renderJobs(jobs: { item: string; cpu: string; quantity: number; crafted: number; completion: number }[]) {
+    lastJobs = jobs;
     const list = document.getElementById('job-list');
     if (!list) return;
     setEl('stat-jobs', String(jobs.length));
@@ -244,7 +300,7 @@ function fmtBytes(b: number): string {
       return;
     }
 
-    list.innerHTML = jobs.map(job => {
+    list.innerHTML = sortJobs(jobs).map(job => {
       const pct = Math.min(100, Math.max(0, job.completion));
       return `
         <div class="px-4 py-3 border-b border-mc-cobble/50 last:border-0">

@@ -67,6 +67,18 @@ function miColourFor(label: string): string {
   const key = label.replace(/ /g, '_');
   return miTypeColour[key] ?? 'white';
 }
+
+function formatMachineType(type: string): string {
+  let s = type
+    .replace(/^basic/, 'B.')
+    .replace(/^advanced/, 'A.')
+    .replace(/^elite/, 'E.')
+    .replace(/^ultimate/, 'U.')
+    .replace(/Factory$/, 'Fac');
+  s = s.replace(/([a-z])([A-Z])/g, '$1 $2');
+  s = s.replace(/_/g, ' ');
+  return s;
+}
 ---
 
 <Layout title="MC Base — Machines">
@@ -100,7 +112,7 @@ function miColourFor(label: string): string {
             <!-- Type header -->
             <div class="flex items-center gap-3 mb-2">
               <span class={`font-mc text-xs text-mc-${col} uppercase tracking-widest`}>
-                {type.replace(/_/g, ' ')}
+                {formatMachineType(type)}
               </span>
               <span class="font-mc text-xs text-mc-muted">
                 <span class="text-mc-emerald" data-active-count={type}>{active}</span>
@@ -294,6 +306,18 @@ function miColourFor(label: string): string {
   function colourFor(type: string) { return COLOURS[type] ?? 'white'; }
   function miColourFor(label: string) { return MI_COLOURS[label.replace(/ /g, '_')] ?? 'white'; }
 
+  function formatMachineType(type: string): string {
+    let s = type
+      .replace(/^basic/, 'B.')
+      .replace(/^advanced/, 'A.')
+      .replace(/^elite/, 'E.')
+      .replace(/^ultimate/, 'U.')
+      .replace(/Factory$/, 'Fac');
+    s = s.replace(/([a-z])([A-Z])/g, '$1 $2');
+    s = s.replace(/_/g, ' ');
+    return s;
+  }
+
   // ── Mekanism grid refresh ─────────────────────────────────────────────────
 
   type MekMachine = {
@@ -415,7 +439,7 @@ function miColourFor(label: string): string {
       </div>`).join('');
     return `
       <div class="flex items-center gap-3 mb-2">
-        <span class="font-mc text-xs text-mc-${col} uppercase tracking-widest">${type.replace(/_/g, ' ')}</span>
+        <span class="font-mc text-xs text-mc-${col} uppercase tracking-widest">${formatMachineType(type)}</span>
         <span class="font-mc text-xs text-mc-muted">
           <span class="text-mc-emerald" data-active-count="${type}">${active}</span>/${group.length}
         </span>

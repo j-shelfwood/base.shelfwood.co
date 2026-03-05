@@ -159,6 +159,7 @@ function itemLabel(registryName: string): string {
   const REFRESH_MS = 60_000;
   let currentQuery = '';
   let sortMode: 'count' | 'name' = 'count';
+  let sortDir: 'desc' | 'asc' = 'desc';
   let allItems: { item: string; count: number }[] = [];
 
   function itemLabel(name: string): string {
@@ -174,9 +175,12 @@ function itemLabel(registryName: string): string {
   function sortItems(items: { item: string; count: number }[]) {
     const copy = [...items];
     if (sortMode === 'name') {
-      copy.sort((a, b) => itemLabel(a.item).localeCompare(itemLabel(b.item)));
+      copy.sort((a, b) => {
+        const cmp = itemLabel(a.item).localeCompare(itemLabel(b.item));
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
     } else {
-      copy.sort((a, b) => b.count - a.count);
+      copy.sort((a, b) => sortDir === 'desc' ? b.count - a.count : a.count - b.count);
     }
     return copy;
   }
@@ -185,11 +189,13 @@ function itemLabel(registryName: string): string {
     const btnCount = document.getElementById('sort-count');
     const btnName = document.getElementById('sort-name');
     if (btnCount) {
-      btnCount.textContent = sortMode === 'count' ? 'COUNT ▼' : 'COUNT';
+      const arrow = sortMode === 'count' ? (sortDir === 'desc' ? ' ▼' : ' ▲') : '';
+      btnCount.textContent = 'COUNT' + arrow;
       btnCount.className = `mc-slot px-3 py-1.5 font-mc text-xs ${sortMode === 'count' ? 'text-mc-diamond' : 'text-mc-muted'}`;
     }
     if (btnName) {
-      btnName.textContent = sortMode === 'name' ? 'NAME ▲' : 'NAME';
+      const arrow = sortMode === 'name' ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+      btnName.textContent = 'NAME' + arrow;
       btnName.className = `mc-slot px-3 py-1.5 font-mc text-xs ${sortMode === 'name' ? 'text-mc-diamond' : 'text-mc-muted'}`;
     }
   }
@@ -222,12 +228,22 @@ function itemLabel(registryName: string): string {
 
   // Sort button handlers
   document.getElementById('sort-count')?.addEventListener('click', () => {
-    sortMode = 'count';
+    if (sortMode === 'count') {
+      sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+    } else {
+      sortMode = 'count';
+      sortDir = 'desc';
+    }
     updateSortButtons();
     renderItems(allItems);
   });
   document.getElementById('sort-name')?.addEventListener('click', () => {
-    sortMode = 'name';
+    if (sortMode === 'name') {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortMode = 'name';
+      sortDir = 'asc';
+    }
     updateSortButtons();
     renderItems(allItems);
   });
