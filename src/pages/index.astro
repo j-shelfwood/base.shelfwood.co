@@ -274,41 +274,56 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     </div>
 
     <Panel title="MEKANISM MACHINES" raised noPadding class="mb-6">
-      <div id="mek-grid" class="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 items-start">
+      <div id="mek-grid" class="p-4 flex flex-wrap gap-6">
         {Object.keys(mekByType).length === 0 && <p class="font-mc text-base text-mc-muted py-2">No Mekanism machine data</p>}
         {Object.entries(mekByType).map(([type, machines]) => {
           const active = machines.filter(m => m.active).length;
           const col = colourFor(type);
           return (
-            <div data-type-group={type}>
-              <div class="flex items-center gap-3 mb-2">
-                <span class={`font-mc text-base text-mc-${col} uppercase tracking-widest`}>{formatMachineType(type)}</span>
-                <span class="font-mc text-base text-mc-muted">
+            <div data-type-group={type} class="flex flex-col gap-2">
+              <div class="flex items-center gap-2">
+                <span class={`font-mc text-sm text-mc-${col} uppercase tracking-widest`}>{formatMachineType(type)}</span>
+                <span class="font-mc text-sm text-mc-muted">
                   <span class="text-mc-emerald" data-active-count={type}>{active}</span>/{machines.length}
                 </span>
               </div>
               <div class="flex flex-wrap gap-2">
-                {machines.map(m => (
+                {machines.map((m, idx) => (
                   <div class:list={['machine-cell group relative cursor-default transition-all duration-300',
-                    'pixel-border w-16 h-16 flex flex-col items-center justify-center gap-0.5',
+                    'pixel-border w-24 h-24 flex flex-col items-center justify-center gap-1 p-1',
                     m.active ? `bg-mc-${col}/20` : 'bg-mc-stone/40']}
                     data-machine={m.name} data-type={type}
                     data-active={m.active ? '1' : '0'} data-energy={m.energy_percent.toFixed(0)} data-progress={m.progress_percent.toFixed(0)}>
                     {m.active && <div class={`absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none`} />}
-                    <span class={`font-mc text-base leading-none z-10 px-0.5 text-center truncate w-full ${m.active ? `text-mc-${col}` : 'text-mc-muted'}`}>
-                      {m.name.replace(/_/g, ' ').replace(/mekanism /i, '').slice(0, 10)}
-                    </span>
-                    <span class:list={['w-1.5 h-1.5 z-10', m.active ? 'bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]' : 'bg-mc-stone']} />
-                    <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
+                    {/* Index number */}
+                    <span class={`font-mc text-xs z-10 ${m.active ? `text-mc-${col}` : 'text-mc-muted'}`}>#{idx + 1}</span>
+                    {/* Status dot */}
+                    <span class:list={['w-2 h-2 z-10', m.active ? 'bg-mc-emerald shadow-[0_0_6px_var(--color-mc-emerald)]' : 'bg-mc-stone']} />
+                    {/* Status label or progress */}
+                    {m.active && m.progress_percent > 0 ? (
+                      <span class={`font-mc text-sm z-10 text-mc-${col}`}>{m.progress_percent.toFixed(0)}%</span>
+                    ) : (
+                      <span class={`font-mc text-xs z-10 ${m.active ? `text-mc-${col}` : 'text-mc-muted'}`}>{m.active ? 'ACTIVE' : 'IDLE'}</span>
+                    )}
+                    {/* Energy bar at bottom */}
+                    <div class="absolute bottom-0 left-0 right-0 h-1.5 bg-mc-shadow">
                       <div class="h-full bg-mc-gold transition-all duration-500" style={`width:${Math.min(100, m.energy_percent)}%`} />
                     </div>
-                    <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
-                      <span class="font-mc text-base text-mc-white capitalize">{m.name.replace(/_/g, ' ')}</span>
-                      <span class={`font-mc text-base ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}`}>{m.active ? 'ACTIVE' : 'IDLE'}</span>
+                    {/* Tooltip */}
+                    <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-40 pointer-events-none">
+                      <span class="font-mc text-sm text-mc-white capitalize">{m.name.replace(/_/g, ' ')}</span>
+                      <span class={`font-mc text-sm ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}`}>{m.active ? 'ACTIVE' : 'IDLE'}</span>
+                      {m.progress_percent > 0 && (
+                        <div class="flex items-center gap-1 mt-0.5">
+                          <span class="font-mc text-xs text-mc-white w-12">PROGRESS</span>
+                          <div class="flex-1 h-1.5 bg-mc-shadow"><div class={`h-full bg-mc-${col}`} style={`width:${m.progress_percent}%`} /></div>
+                          <span class={`font-mc text-xs text-mc-${col}`}>{m.progress_percent.toFixed(0)}%</span>
+                        </div>
+                      )}
                       <div class="flex items-center gap-1 mt-0.5">
-                        <span class="font-mc text-base text-mc-gold w-10">ENERGY</span>
+                        <span class="font-mc text-xs text-mc-gold w-12">ENERGY</span>
                         <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style={`width:${Math.min(100, m.energy_percent)}%`} /></div>
-                        <span class="font-mc text-base text-mc-gold">{m.energy_percent.toFixed(0)}%</span>
+                        <span class="font-mc text-xs text-mc-gold">{m.energy_percent.toFixed(0)}%</span>
                       </div>
                     </div>
                   </div>
@@ -321,56 +336,65 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     </Panel>
 
     <Panel title="MODERN INDUSTRIALIZATION" raised noPadding>
-      <div id="mi-grid" class="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 items-start">
+      <div id="mi-grid" class="p-4 flex flex-wrap gap-6">
         {Object.keys(miByType).length === 0 && <p class="font-mc text-base text-mc-muted py-2">No MI machine data</p>}
         {Object.entries(miByType).map(([type, machines]) => {
           const active = machines.filter(m => m.active).length;
           const col = miColourFor(type.replace('modern_industrialization:', '').replace(/_/g, ' '));
           return (
-            <div data-type-group={type}>
-              <div class="flex items-center gap-3 mb-2">
-                <span class={`font-mc text-base text-mc-${col} uppercase tracking-widest`}>
+            <div data-type-group={type} class="flex flex-col gap-2">
+              <div class="flex items-center gap-2">
+                <span class={`font-mc text-sm text-mc-${col} uppercase tracking-widest`}>
                   {type.replace('modern_industrialization:', '').replace(/_/g, ' ')}
                 </span>
-                <span class="font-mc text-base text-mc-muted">
+                <span class="font-mc text-sm text-mc-muted">
                   <span class="text-mc-emerald" data-active-count={type}>{active}</span>/{machines.length}
                 </span>
               </div>
               <div class="flex flex-wrap gap-2">
-                {machines.map(m => {
+                {machines.map((m, idx) => {
                   const isSteam = m.type.includes('steel_');
-                  const slotPct = m.total_slots ? (m.occupied_slots ?? 0) / m.total_slots * 100 : 0;
-                  const barPct = isSteam ? slotPct : m.energy_percent;
+                  const slotPct = m.total_slots ? Math.min(100, (m.occupied_slots ?? 0) / m.total_slots * 100) : 0;
+                  const barPct = isSteam ? slotPct : Math.min(100, m.energy_percent);
                   const barColour = isSteam ? 'var(--color-mc-diamond)' : 'var(--color-mc-gold)';
                   return (
                     <div class:list={['machine-cell group relative cursor-default transition-all duration-300',
-                      'pixel-border w-16 h-16 flex flex-col items-center justify-center gap-0.5',
+                      'pixel-border w-24 h-24 flex flex-col items-center justify-center gap-1 p-1',
                       m.active ? `bg-mc-${col}/20` : 'bg-mc-stone/40']}
                       data-machine={m.name} data-type={type}
                       data-active={m.active ? '1' : '0'} data-energy={m.energy_percent.toFixed(0)}
                       data-occupied={m.occupied_slots ?? 0} data-total-slots={m.total_slots ?? 0}>
                       {m.active && <div class={`absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none`} />}
-                      <span class={`font-mc text-base leading-none z-10 px-0.5 text-center truncate w-full ${m.active ? `text-mc-${col}` : 'text-mc-muted'}`}>
-                        {m.name.replace(/_/g, ' ').replace(/modern industrialization /i, '').slice(0, 10)}
-                      </span>
-                      <span class:list={['w-1.5 h-1.5 z-10', m.active ? 'bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]' : 'bg-mc-stone']} />
-                      <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
-                        <div class="h-full transition-all duration-500" style={`width:${Math.min(100, barPct)}%;background-color:${barColour}`} />
+                      {/* Index number */}
+                      <span class={`font-mc text-xs z-10 ${m.active ? `text-mc-${col}` : 'text-mc-muted'}`}>#{idx + 1}</span>
+                      {/* Status dot */}
+                      <span class:list={['w-2 h-2 z-10', m.active ? 'bg-mc-emerald shadow-[0_0_6px_var(--color-mc-emerald)]' : 'bg-mc-stone']} />
+                      {/* Slot fill or idle */}
+                      {m.active && m.total_slots ? (
+                        <span class={`font-mc text-sm z-10 text-mc-${col}`}>{m.occupied_slots}/{m.total_slots}</span>
+                      ) : (
+                        <span class={`font-mc text-xs z-10 ${m.active ? `text-mc-${col}` : 'text-mc-muted'}`}>{m.active ? 'ACTIVE' : 'IDLE'}</span>
+                      )}
+                      {/* Bar at bottom */}
+                      <div class="absolute bottom-0 left-0 right-0 h-1.5 bg-mc-shadow">
+                        <div class="h-full transition-all duration-500" style={`width:${barPct}%;background-color:${barColour}`} />
                       </div>
-                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
-                        <span class="font-mc text-base text-mc-white capitalize">{m.name.replace(/_/g, ' ')}</span>
-                        <span class={`font-mc text-base ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}`}>{m.active ? 'ACTIVE' : 'IDLE'}</span>
+                      {/* Tooltip */}
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-40 pointer-events-none">
+                        <span class="font-mc text-sm text-mc-white capitalize">{m.name.replace(/_/g, ' ')}</span>
+                        <span class={`font-mc text-sm ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}`}>{m.active ? 'ACTIVE' : 'IDLE'}</span>
                         {!isSteam && (
                           <div class="flex items-center gap-1 mt-0.5">
-                            <span class="font-mc text-base text-mc-gold w-10">ENERGY</span>
+                            <span class="font-mc text-xs text-mc-gold w-12">ENERGY</span>
                             <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style={`width:${Math.min(100, m.energy_percent)}%`} /></div>
-                            <span class="font-mc text-base text-mc-gold">{m.energy_percent.toFixed(0)}%</span>
+                            <span class="font-mc text-xs text-mc-gold">{m.energy_percent.toFixed(0)}%</span>
                           </div>
                         )}
                         {m.occupied_slots != null && m.total_slots != null && (
                           <div class="flex items-center gap-1">
-                            <span class="font-mc text-base text-mc-diamond w-10">SLOTS</span>
-                            <span class="font-mc text-base text-mc-diamond">{m.occupied_slots}/{m.total_slots}</span>
+                            <span class="font-mc text-xs text-mc-diamond w-12">SLOTS</span>
+                            <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-diamond" style={`width:${slotPct}%`} /></div>
+                            <span class="font-mc text-xs text-mc-diamond">{m.occupied_slots}/{m.total_slots}</span>
                           </div>
                         )}
                       </div>
@@ -744,44 +768,49 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   type MekM = { name: string; type: string; active: boolean; energy_percent: number; progress_percent: number; progress_total: number };
   type MIM  = { name: string; type: string; active: boolean; energy_percent: number; occupied_slots?: number; total_slots?: number };
 
-  function buildMekCell(m: MekM, col: string): string {
-    const name = m.name.replace(/_/g, ' ').replace(/mekanism /i, '').slice(0, 10);
+  function buildMekCell(m: MekM, col: string, idx: number): string {
     const pctE = Math.min(100, m.energy_percent);
+    const centerLine = m.active && m.progress_percent > 0
+      ? `<span class="font-mc text-sm z-10 text-mc-${col}">${m.progress_percent.toFixed(0)}%</span>`
+      : `<span class="font-mc text-xs z-10 ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>`;
+    const progressRow = m.progress_percent > 0
+      ? `<div class="flex items-center gap-1 mt-0.5"><span class="font-mc text-xs text-mc-white w-12">PROGRESS</span><div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-${col}" style="width:${m.progress_percent}%"></div></div><span class="font-mc text-xs text-mc-${col}">${m.progress_percent.toFixed(0)}%</span></div>` : '';
     return `${m.active ? `<div class="absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none"></div>` : ''}
-      <span class="font-mc text-base leading-none z-10 px-0.5 text-center w-full truncate ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">${name}</span>
-      <span class="w-1.5 h-1.5 z-10 ${m.active ? `bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]` : 'bg-mc-stone'}"></span>
-      <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${pctE}%"></div></div>
-      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
-        <span class="font-mc text-base text-mc-white capitalize">${m.name.replace(/_/g, ' ')}</span>
-        <span class="font-mc text-base ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
-        <div class="flex items-center gap-1 mt-0.5">
-          <span class="font-mc text-base text-mc-gold w-10">ENERGY</span>
-          <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${pctE}%"></div></div>
-          <span class="font-mc text-base text-mc-gold">${pctE.toFixed(0)}%</span>
-        </div>
+      <span class="font-mc text-xs z-10 ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">#${idx + 1}</span>
+      <span class="w-2 h-2 z-10 ${m.active ? `bg-mc-emerald shadow-[0_0_6px_var(--color-mc-emerald)]` : 'bg-mc-stone'}"></span>
+      ${centerLine}
+      <div class="absolute bottom-0 left-0 right-0 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${pctE}%"></div></div>
+      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-40 pointer-events-none">
+        <span class="font-mc text-sm text-mc-white capitalize">${m.name.replace(/_/g, ' ')}</span>
+        <span class="font-mc text-sm ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
+        ${progressRow}
+        <div class="flex items-center gap-1 mt-0.5"><span class="font-mc text-xs text-mc-gold w-12">ENERGY</span><div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${pctE}%"></div></div><span class="font-mc text-xs text-mc-gold">${pctE.toFixed(0)}%</span></div>
       </div>`;
   }
 
-  function buildMICell(m: MIM, col: string): string {
-    const name = m.name.replace(/_/g, ' ').replace(/modern industrialization /i, '').slice(0, 10);
+  function buildMICell(m: MIM, col: string, idx: number): string {
     const isSteam = m.type.includes('steel_');
     const slotPct = m.total_slots ? Math.min(100, (m.occupied_slots ?? 0) / m.total_slots * 100) : 0;
     const barPct = isSteam ? slotPct : Math.min(100, m.energy_percent);
     const barC = isSteam ? 'var(--color-mc-diamond)' : 'var(--color-mc-gold)';
-    const energyRow = !isSteam ? `<div class="flex items-center gap-1 mt-0.5"><span class="font-mc text-base text-mc-gold w-10">ENERGY</span><div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${barPct}%"></div></div><span class="font-mc text-base text-mc-gold">${barPct.toFixed(0)}%</span></div>` : '';
-    const slotsRow = m.occupied_slots != null && m.total_slots != null ? `<div class="flex items-center gap-1"><span class="font-mc text-base text-mc-diamond w-10">SLOTS</span><span class="font-mc text-base text-mc-diamond">${m.occupied_slots}/${m.total_slots}</span></div>` : '';
+    const centerLine = m.active && m.total_slots
+      ? `<span class="font-mc text-sm z-10 text-mc-${col}">${m.occupied_slots}/${m.total_slots}</span>`
+      : `<span class="font-mc text-xs z-10 ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>`;
+    const energyRow = !isSteam ? `<div class="flex items-center gap-1 mt-0.5"><span class="font-mc text-xs text-mc-gold w-12">ENERGY</span><div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${barPct}%"></div></div><span class="font-mc text-xs text-mc-gold">${barPct.toFixed(0)}%</span></div>` : '';
+    const slotsRow = m.occupied_slots != null && m.total_slots != null ? `<div class="flex items-center gap-1"><span class="font-mc text-xs text-mc-diamond w-12">SLOTS</span><div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-diamond" style="width:${slotPct}%"></div></div><span class="font-mc text-xs text-mc-diamond">${m.occupied_slots}/${m.total_slots}</span></div>` : '';
     return `${m.active ? `<div class="absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none"></div>` : ''}
-      <span class="font-mc text-base leading-none z-10 px-0.5 text-center w-full truncate ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">${name}</span>
-      <span class="w-1.5 h-1.5 z-10 ${m.active ? `bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]` : 'bg-mc-stone'}"></span>
-      <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow"><div class="h-full transition-all" style="width:${barPct}%;background-color:${barC}"></div></div>
-      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
-        <span class="font-mc text-base text-mc-white capitalize">${m.name.replace(/_/g, ' ')}</span>
-        <span class="font-mc text-base ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
+      <span class="font-mc text-xs z-10 ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">#${idx + 1}</span>
+      <span class="w-2 h-2 z-10 ${m.active ? `bg-mc-emerald shadow-[0_0_6px_var(--color-mc-emerald)]` : 'bg-mc-stone'}"></span>
+      ${centerLine}
+      <div class="absolute bottom-0 left-0 right-0 h-1.5 bg-mc-shadow"><div class="h-full transition-all" style="width:${barPct}%;background-color:${barC}"></div></div>
+      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-40 pointer-events-none">
+        <span class="font-mc text-sm text-mc-white capitalize">${m.name.replace(/_/g, ' ')}</span>
+        <span class="font-mc text-sm ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
         ${energyRow}${slotsRow}
       </div>`;
   }
 
-  function renderMachineGrid(containerId: string, machines: (MekM | MIM)[], buildCell: (m: any, col: string) => string, getCol: (type: string) => string, getLabel: (type: string) => string) {
+  function renderMachineGrid(containerId: string, machines: (MekM | MIM)[], buildCell: (m: any, col: string, idx: number) => string, getCol: (type: string) => string, getLabel: (type: string) => string) {
     const container = document.getElementById(containerId);
     if (!container) return;
     const byType: Record<string, typeof machines> = {};
@@ -793,26 +822,28 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       if (!groupEl) {
         groupEl = document.createElement('div');
         groupEl.dataset.typeGroup = type;
+        groupEl.className = 'flex flex-col gap-2';
         container.appendChild(groupEl);
       }
       const header = groupEl.querySelector('[data-active-count]');
       if (header) { header.textContent = String(active); }
       let cells = groupEl.querySelector('.flex.flex-wrap') as HTMLElement | null;
       if (!cells) {
-        groupEl.innerHTML = `<div class="flex items-center gap-3 mb-2"><span class="font-mc text-base text-mc-${col} uppercase tracking-widest">${getLabel(type)}</span><span class="font-mc text-base text-mc-muted"><span class="text-mc-emerald" data-active-count="${type}">${active}</span>/${group.length}</span></div><div class="flex flex-wrap gap-2"></div>`;
+        groupEl.innerHTML = `<div class="flex items-center gap-2"><span class="font-mc text-sm text-mc-${col} uppercase tracking-widest">${getLabel(type)}</span><span class="font-mc text-sm text-mc-muted"><span class="text-mc-emerald" data-active-count="${type}">${active}</span>/${group.length}</span></div><div class="flex flex-wrap gap-2"></div>`;
         cells = groupEl.querySelector('.flex.flex-wrap');
       }
       if (!cells) continue;
-      for (const m of group) {
+      for (let i = 0; i < group.length; i++) {
+        const m = group[i]!;
         let cell = cells.querySelector(`[data-machine="${m.name}"]`) as HTMLElement | null;
         const wasActive = cell?.dataset.active === '1';
         if (!cell) { cell = document.createElement('div'); cells.appendChild(cell); }
         cell.dataset.machine = m.name; cell.dataset.active = m.active ? '1' : '0';
-        cell.innerHTML = buildCell(m, col);
-        cell.className = `machine-cell group relative cursor-default transition-all duration-300 pixel-border w-16 h-16 flex flex-col items-center justify-center gap-0.5 ${m.active ? `bg-mc-${col}/20` : 'bg-mc-stone/40'}`;
+        cell.innerHTML = buildCell(m, col, i);
+        cell.className = `machine-cell group relative cursor-default transition-all duration-300 pixel-border w-24 h-24 flex flex-col items-center justify-center gap-1 p-1 ${m.active ? `bg-mc-${col}/20` : 'bg-mc-stone/40'}`;
         if (wasActive !== m.active) {
-          cell.classList.add(m.active ? 'animate-ping-once' : 'opacity-50');
-          setTimeout(() => cell!.classList.remove('animate-ping-once', 'opacity-50'), 600);
+          cell.classList.add(m.active ? 'scale-105' : 'opacity-50');
+          setTimeout(() => cell!.classList.remove('scale-105', 'opacity-50'), 600);
         }
       }
     }
