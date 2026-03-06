@@ -58,13 +58,13 @@ function itemLabel(registryName: string): string {
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
     <StatCard label="Total Items" value={summary ? fmt(summary.items_total) : '—'} colour="diamond" id="stat-total-items" />
     <StatCard label="Unique Types" value={summary?.items_unique ?? '—'} colour="diamond" id="stat-unique" />
-    <StatCard label="Storage Used" value={summary ? ((summary.item_storage_used / (summary.item_storage_total || 1)) * 100).toFixed(1) + '%' : '—'} colour="lapis" id="stat-storage-pct" />
-    <StatCard label="Fluids" value={summary ? fmt(summary.fluids_total) : '—'} colour="diamond" id="stat-fluids" />
+    <StatCard label="Item Storage" value={summary ? ((summary.item_storage_used / (summary.item_storage_total || 1)) * 100).toFixed(1) + '%' : '—'} colour="lapis" id="stat-storage-pct" />
+    <StatCard label="Fluids" value={summary ? fmt(summary.fluids_total) + ' mB' : '—'} colour="diamond" id="stat-fluids" />
   </div>
 
-  <!-- Storage bar -->
+  <!-- Storage capacity bars -->
   {summary && (
-    <div class="mb-6">
+    <div class="mb-6 flex flex-col gap-3">
       <ProgressBar
         value={summary.item_storage_used}
         max={summary.item_storage_total || 1}
@@ -73,6 +73,26 @@ function itemLabel(registryName: string): string {
         showPercent
         id="progress-storage"
       />
+      {summary.fluid_storage_total > 0 && (
+        <ProgressBar
+          value={summary.fluid_storage_used}
+          max={summary.fluid_storage_total}
+          colour="lapis"
+          label="Fluid Cell Capacity"
+          showPercent
+          id="progress-fluid-storage"
+        />
+      )}
+      {summary.chemical_storage_total > 0 && (
+        <ProgressBar
+          value={summary.chemical_storage_used}
+          max={summary.chemical_storage_total}
+          colour="amethyst"
+          label="Chemical Cell Capacity"
+          showPercent
+          id="progress-chem-storage"
+        />
+      )}
     </div>
   )}
 

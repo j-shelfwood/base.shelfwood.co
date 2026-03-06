@@ -236,24 +236,32 @@ function formatMachineType(type: string): string {
                     'w-1.5 h-1.5 z-10',
                     m.active ? 'bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]' : 'bg-mc-stone',
                   ]} />
-                  <!-- Energy bar at bottom -->
-                  <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
-                    <div
-                      class="h-full bg-mc-gold transition-all duration-500"
-                      style={`width:${Math.min(100, m.energy_percent)}%`}
-                    />
-                  </div>
+                  <!-- Bottom bar: slot occupancy for steam machines, energy for electric -->
+                  {(() => {
+                    const isSteam = m.type.includes('steel_');
+                    const slotPct = m.total_slots ? (m.occupied_slots ?? 0) / m.total_slots * 100 : 0;
+                    return (
+                      <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
+                        <div
+                          class={`h-full transition-all duration-500 ${isSteam ? 'bg-mc-diamond' : 'bg-mc-gold'}`}
+                          style={`width:${Math.min(100, isSteam ? slotPct : m.energy_percent)}%`}
+                        />
+                      </div>
+                    );
+                  })()}
                   <!-- Tooltip on hover -->
                   <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
                     <span class="font-mc text-[9px] text-mc-white capitalize">{m.name.replace(/_/g, ' ')}</span>
                     <span class={`font-mc text-[9px] ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}`}>{m.active ? 'ACTIVE' : 'IDLE'}</span>
-                    <div class="flex items-center gap-1 mt-0.5">
-                      <span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span>
-                      <div class="flex-1 h-1.5 bg-mc-shadow">
-                        <div class="h-full bg-mc-gold" style={`width:${Math.min(100, m.energy_percent)}%`} />
+                    {!m.type.includes('steel_') && (
+                      <div class="flex items-center gap-1 mt-0.5">
+                        <span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span>
+                        <div class="flex-1 h-1.5 bg-mc-shadow">
+                          <div class="h-full bg-mc-gold" style={`width:${Math.min(100, m.energy_percent)}%`} />
+                        </div>
+                        <span class="font-mc text-[8px] text-mc-gold">{m.energy_percent.toFixed(0)}%</span>
                       </div>
-                      <span class="font-mc text-[8px] text-mc-gold">{m.energy_percent.toFixed(0)}%</span>
-                    </div>
+                    )}
                     {m.occupied_slots != null && m.total_slots != null && (
                       <div class="flex items-center gap-1">
                         <span class="font-mc text-[8px] text-mc-diamond w-10">SLOTS</span>
@@ -534,6 +542,17 @@ function formatMachineType(type: string): string {
   function buildMICellInner(m: MIMachine, col: string, label: string): string {
     const shortName = m.name.replace(/_/g, ' ').replace(/modern industrialization /i, '').slice(0, 10);
     const pctE = Math.min(100, m.energy_percent);
+    const isSteam = m.type.includes('steel_');
+    const slotPct = m.total_slots ? Math.min(100, (m.occupied_slots ?? 0) / m.total_slots * 100) : 0;
+    const barPct = isSteam ? slotPct : pctE;
+    const barColour = isSteam ? 'var(--color-mc-diamond)' : 'var(--color-mc-gold)';
+    const energyRow = !isSteam
+      ? `<div class="flex items-center gap-1 mt-0.5">
+           <span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span>
+           <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${pctE}%"></div></div>
+           <span class="font-mc text-[8px] text-mc-gold">${pctE.toFixed(0)}%</span>
+         </div>`
+      : '';
     const slotsInfo = m.occupied_slots != null && m.total_slots != null
       ? `<div class="flex items-center gap-1">
            <span class="font-mc text-[8px] text-mc-diamond w-10">SLOTS</span>
@@ -545,16 +564,12 @@ function formatMachineType(type: string): string {
       <span class="font-mc text-[8px] leading-none z-10 px-0.5 text-center w-full truncate ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">${shortName}</span>
       <span class="w-1.5 h-1.5 z-10 ${m.active ? `bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]` : 'bg-mc-stone'}"></span>
       <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
-        <div class="h-full bg-mc-gold transition-all duration-500" style="width:${pctE}%"></div>
+        <div class="h-full transition-all duration-500" style="width:${barPct}%;background-color:${barColour}"></div>
       </div>
       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
         <span class="font-mc text-[9px] text-mc-white capitalize">${m.name.replace(/_/g, ' ')}</span>
         <span class="font-mc text-[9px] ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
-        <div class="flex items-center gap-1 mt-0.5">
-          <span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span>
-          <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${pctE}%"></div></div>
-          <span class="font-mc text-[8px] text-mc-gold">${pctE.toFixed(0)}%</span>
-        </div>
+        ${energyRow}
         ${slotsInfo}
       </div>`;
   }

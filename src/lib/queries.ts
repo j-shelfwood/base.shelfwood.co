@@ -91,10 +91,19 @@ export interface AESummary {
   items_total: number;
   items_unique: number;
   fluids_total: number;
+  fluids_unique: number;
+  chemicals_total: number;
+  chemicals_unique: number;
   item_storage_used: number;
   item_storage_total: number;
+  fluid_storage_used: number;
+  fluid_storage_total: number;
+  chemical_storage_used: number;
+  chemical_storage_total: number;
   energy_usage: number;
   energy_input: number;
+  energy_stored: number;
+  energy_capacity: number;
 }
 
 export async function aeSummary(): Promise<AESummary | null> {
@@ -111,10 +120,19 @@ from(bucket: "${INFLUX_BUCKET}")
     items_total: (r.items_total as number) ?? 0,
     items_unique: (r.items_unique as number) ?? 0,
     fluids_total: (r.fluids_total as number) ?? 0,
+    fluids_unique: (r.fluids_unique as number) ?? 0,
+    chemicals_total: (r.chemicals_total as number) ?? 0,
+    chemicals_unique: (r.chemicals_unique as number) ?? 0,
     item_storage_used: (r.item_storage_used as number) ?? 0,
     item_storage_total: (r.item_storage_total as number) ?? 0,
+    fluid_storage_used: (r.fluid_storage_used as number) ?? 0,
+    fluid_storage_total: (r.fluid_storage_total as number) ?? 0,
+    chemical_storage_used: (r.chemical_storage_used as number) ?? 0,
+    chemical_storage_total: (r.chemical_storage_total as number) ?? 0,
     energy_usage: (r.energy_usage as number) ?? 0,
     energy_input: (r.energy_input as number) ?? 0,
+    energy_stored: (r.energy_stored as number) ?? 0,
+    energy_capacity: (r.energy_capacity as number) ?? 0,
   };
 }
 
@@ -177,21 +195,41 @@ from(bucket: "${INFLUX_BUCKET}")
 from(bucket: "${INFLUX_BUCKET}")
   |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "ae_cpu")
+  |> group(columns: ["cpu", "cpu_index", "node", "source"])
   |> last()
+  |> group()
+  |> map(fn: (r) => ({r with cpu_index: if exists r.cpu_index then r.cpu_index else "0"}))
+  |> pivot(rowKey: ["_time", "cpu", "cpu_index", "node", "source"], columnKey: ["_field"], valueColumn: "_value")
+`).catch(() =>
+      // Fallback for old data without cpu_index tag
+      queryFlux(`
+from(bucket: "${INFLUX_BUCKET}")
+  |> range(start: -24h)
+  |> filter(fn: (r) => r._measurement == "ae_cpu")
+  |> group(columns: ["cpu", "node", "source"])
+  |> last()
+  |> group()
   |> pivot(rowKey: ["_time", "cpu", "node", "source"], columnKey: ["_field"], valueColumn: "_value")
-`),
+`)
+    ),
   ]);
 
   const s = summaryRows[0];
   const total = (s?.total as number) ?? 0;
   const busy = (s?.busy as number) ?? 0;
 
-  const cpus = perCpuRows.map(r => ({
-    name: String(r.cpu ?? 'Unnamed'),
-    storage: (r.storage as number) ?? 0,
-    coProcessors: (r.co_processors as number) ?? 0,
-    busy: (r.is_busy as number) > 0,
-  }));
+  const cpus = perCpuRows.map(r => {
+    const cpuName = String(r.cpu ?? 'unnamed');
+    const idx = r.cpu_index != null ? String(r.cpu_index) : null;
+    // When CPUs are all unnamed, show "CPU N" using the index tag
+    const displayName = (cpuName === 'unnamed' && idx) ? `CPU ${idx}` : cpuName;
+    return {
+      name: displayName,
+      storage: (r.storage as number) ?? 0,
+      coProcessors: (r.co_processors as number) ?? 0,
+      busy: (r.is_busy as number) > 0,
+    };
+  });
 
   return {
     total,
