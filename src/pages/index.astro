@@ -343,19 +343,7 @@ const healthStatus = healthScore >= 80 ? 'NOMINAL' : healthScore >= 60 ? 'DEGRAD
     <div class="mb-6 flex items-end justify-between gap-4 flex-wrap">
       <div>
         <h1 class="font-mc text-mc-white text-xl">STORAGE</h1>
-        <p class="font-mc text-xs text-mc-muted mt-1">AE2 ITEM BROWSER</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <div class="flex items-center gap-1">
-          <button id="sort-count" class="mc-slot px-3 py-1.5 font-mc text-xs text-mc-diamond">COUNT ▼</button>
-          <button id="sort-name"  class="mc-slot px-3 py-1.5 font-mc text-xs text-mc-muted">NAME</button>
-        </div>
-        <div class="mc-slot px-3 py-2 flex items-center gap-2">
-          <span class="font-mc text-xs text-mc-muted">SEARCH:</span>
-          <input id="item-search" type="text" placeholder="iron ingot..."
-            class="bg-transparent font-mc text-xs text-mc-white outline-none placeholder:text-mc-stone w-40"
-            autocomplete="off" />
-        </div>
+        <p class="font-mc text-xs text-mc-muted mt-1">AE2 NETWORK OVERVIEW</p>
       </div>
     </div>
 
@@ -436,21 +424,63 @@ const healthStatus = healthScore >= 80 ? 'NOMINAL' : healthScore >= 60 ? 'DEGRAD
       </div>
     </div>
 
-    <Panel title="ITEMS" raised noPadding>
-      <div id="item-list" class="divide-y divide-mc-cobble/50">
-        {items.map(item => (
-          <div class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors cursor-pointer item-row" data-item={item.item}>
+    <Panel title="TOP ITEMS" raised noPadding>
+      <div id="top-item-list" class="divide-y divide-mc-cobble/50">
+        {items.slice(0, 20).map(item => (
+          <div class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors">
             <div class="flex flex-col gap-0.5">
               <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(item.item)}</span>
-              <span class="font-mc text-xs text-mc-muted">{item.item}</span>
+              <span class="font-mc text-[10px] text-mc-muted">{item.item}</span>
             </div>
             <span class="font-mc text-sm text-mc-diamond shrink-0">{fmt(item.count)}</span>
           </div>
         ))}
         {items.length === 0 && <p class="font-mc text-xs text-mc-muted px-4 py-6">No items found</p>}
       </div>
+      <div class="px-4 py-3 border-t border-mc-cobble/50">
+        <button id="open-browser" class="mc-slot px-4 py-2 font-mc text-xs text-mc-diamond hover:text-mc-white w-full">
+          BROWSE ALL ITEMS ({items.length} types) →
+        </button>
+      </div>
     </Panel>
   </section>
+
+  <!-- ═══════════════════════════════════════════════════════ ITEM BROWSER POPOVER ══ -->
+  <div id="item-browser" class="fixed inset-0 z-[100] hidden" role="dialog" aria-modal="true">
+    <!-- Backdrop -->
+    <div id="browser-backdrop" class="absolute inset-0 bg-black/80"></div>
+    <!-- Panel -->
+    <div class="absolute inset-4 md:inset-8 lg:inset-16 bg-mc-deep flex flex-col pixel-border overflow-hidden">
+      <!-- Header -->
+      <div class="flex items-center gap-3 px-4 py-3 border-b-2 border-mc-cobble shrink-0">
+        <span class="font-mc text-mc-diamond text-sm">ITEM BROWSER</span>
+        <div class="flex items-center gap-1 ml-2">
+          <button id="br-sort-count" class="mc-slot px-3 py-1 font-mc text-xs text-mc-diamond">COUNT ▼</button>
+          <button id="br-sort-name"  class="mc-slot px-3 py-1 font-mc text-xs text-mc-muted">NAME</button>
+        </div>
+        <div class="mc-slot px-3 py-1.5 flex items-center gap-2 flex-1 max-w-xs">
+          <span class="font-mc text-xs text-mc-muted">SEARCH:</span>
+          <input id="item-search" type="text" placeholder="iron ingot..."
+            class="bg-transparent font-mc text-xs text-mc-white outline-none placeholder:text-mc-stone flex-1 min-w-0"
+            autocomplete="off" />
+        </div>
+        <span id="br-count" class="font-mc text-xs text-mc-muted ml-auto"></span>
+        <button id="close-browser" class="mc-slot px-3 py-1.5 font-mc text-xs text-mc-redstone hover:text-mc-white ml-2">✕ CLOSE</button>
+      </div>
+      <!-- Scrollable list -->
+      <div id="item-list" class="flex-1 overflow-y-auto divide-y divide-mc-cobble/50">
+        {items.map(item => (
+          <div class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors">
+            <div class="flex flex-col gap-0.5">
+              <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(item.item)}</span>
+              <span class="font-mc text-[10px] text-mc-muted">{item.item}</span>
+            </div>
+            <span class="font-mc text-sm text-mc-diamond shrink-0">{fmt(item.count)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
 
   <!-- ════════════════════════════════════════════════════════════ CRAFTING ══ -->
   <section id="crafting" class="mb-16 scroll-mt-16">
@@ -741,6 +771,7 @@ const healthStatus = healthScore >= 80 ? 'NOMINAL' : healthScore >= 60 ? 'DEGRAD
   let sortMode: 'count' | 'name' = 'count';
   let sortDir: 'desc' | 'asc' = 'desc';
   let allItems: { item: string; count: number }[] = [];
+  let browserOpen = false;
 
   function sortItems(items: { item: string; count: number }[]) {
     const copy = [...items];
@@ -750,37 +781,76 @@ const healthStatus = healthScore >= 80 ? 'NOMINAL' : healthScore >= 60 ? 'DEGRAD
   }
 
   function updateSortButtons() {
-    const btnC = document.getElementById('sort-count');
-    const btnN = document.getElementById('sort-name');
+    const btnC = document.getElementById('br-sort-count');
+    const btnN = document.getElementById('br-sort-name');
     if (btnC) {
       btnC.textContent = 'COUNT' + (sortMode === 'count' ? (sortDir === 'desc' ? ' ▼' : ' ▲') : '');
-      btnC.className = `mc-slot px-3 py-1.5 font-mc text-xs ${sortMode === 'count' ? 'text-mc-diamond' : 'text-mc-muted'}`;
+      btnC.className = `mc-slot px-3 py-1 font-mc text-xs ${sortMode === 'count' ? 'text-mc-diamond' : 'text-mc-muted'}`;
     }
     if (btnN) {
       btnN.textContent = 'NAME' + (sortMode === 'name' ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
-      btnN.className = `mc-slot px-3 py-1.5 font-mc text-xs ${sortMode === 'name' ? 'text-mc-diamond' : 'text-mc-muted'}`;
+      btnN.className = `mc-slot px-3 py-1 font-mc text-xs ${sortMode === 'name' ? 'text-mc-diamond' : 'text-mc-muted'}`;
     }
   }
 
-  function renderItems(items: { item: string; count: number }[]) {
+  function renderRow(i: { item: string; count: number }) {
+    return `<div class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors">
+      <div class="flex flex-col gap-0.5">
+        <span class="font-mc text-xs text-mc-white capitalize">${itemLabel(i.item)}</span>
+        <span class="font-mc text-[10px] text-mc-muted">${i.item}</span>
+      </div>
+      <span class="font-mc text-sm text-mc-diamond">${fmt(i.count)}</span>
+    </div>`;
+  }
+
+  function renderTopItems(items: { item: string; count: number }[]) {
+    const el = document.getElementById('top-item-list');
+    if (!el) return;
+    const top = [...items].sort((a, b) => b.count - a.count).slice(0, 20);
+    el.innerHTML = top.length === 0
+      ? '<p class="font-mc text-xs text-mc-muted px-4 py-6">No items found</p>'
+      : top.map(renderRow).join('');
+    const btn = document.getElementById('open-browser');
+    if (btn) btn.textContent = `BROWSE ALL ITEMS (${items.length} types) →`;
+  }
+
+  function renderBrowserItems(items: { item: string; count: number }[]) {
     const list = document.getElementById('item-list');
+    const countEl = document.getElementById('br-count');
     if (!list) return;
     const sorted = sortItems(items);
+    if (countEl) countEl.textContent = `${sorted.length} types`;
     list.innerHTML = sorted.length === 0
       ? '<p class="font-mc text-xs text-mc-muted px-4 py-6">No items found</p>'
-      : sorted.map(i => `<div class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors cursor-pointer item-row" data-item="${i.item}">
-          <div class="flex flex-col gap-0.5">
-            <span class="font-mc text-xs text-mc-white capitalize">${itemLabel(i.item)}</span>
-            <span class="font-mc text-xs text-mc-muted">${i.item}</span>
-          </div>
-          <span class="font-mc text-sm text-mc-diamond">${fmt(i.count)}</span>
-        </div>`).join('');
+      : sorted.map(renderRow).join('');
+  }
+
+  function openBrowser() {
+    browserOpen = true;
+    const el = document.getElementById('item-browser');
+    if (el) el.classList.remove('hidden');
+    renderBrowserItems(allItems);
+    document.body.style.overflow = 'hidden';
+    (document.getElementById('item-search') as HTMLInputElement | null)?.focus();
+  }
+
+  function closeBrowser() {
+    browserOpen = false;
+    const el = document.getElementById('item-browser');
+    if (el) el.classList.add('hidden');
+    document.body.style.overflow = '';
+    const input = document.getElementById('item-search') as HTMLInputElement | null;
+    if (input) { input.value = ''; currentQuery = ''; }
   }
 
   async function loadItems(q?: string) {
     const url = q ? `/api/ae-items?q=${encodeURIComponent(q)}` : '/api/ae-items';
     const data = await fetch(url).then(r => r.json());
-    if (data.items) { allItems = data.items; renderItems(allItems); }
+    if (data.items) {
+      if (!q) allItems = data.items;
+      renderTopItems(q ? allItems : data.items);
+      if (browserOpen) renderBrowserItems(data.items);
+    }
   }
 
   function renderVelocity(selector: string, items: { item: string; delta: number }[], sign: 1 | -1, colour: string, emptyMsg: string) {
@@ -806,21 +876,30 @@ const healthStatus = healthScore >= 80 ? 'NOMINAL' : healthScore >= 60 ? 'DEGRAD
     renderVelocity('[data-panel="consumers"]', data.velocity, -1, 'text-mc-redstone', 'No consumption detected');
   }
 
-  document.getElementById('sort-count')?.addEventListener('click', () => {
+  document.getElementById('br-sort-count')?.addEventListener('click', () => {
     sortMode === 'count' ? (sortDir = sortDir === 'desc' ? 'asc' : 'desc') : (sortMode = 'count', sortDir = 'desc');
-    updateSortButtons(); renderItems(allItems);
+    updateSortButtons(); renderBrowserItems(allItems);
   });
-  document.getElementById('sort-name')?.addEventListener('click', () => {
+  document.getElementById('br-sort-name')?.addEventListener('click', () => {
     sortMode === 'name' ? (sortDir = sortDir === 'asc' ? 'desc' : 'asc') : (sortMode = 'name', sortDir = 'asc');
-    updateSortButtons(); renderItems(allItems);
+    updateSortButtons(); renderBrowserItems(allItems);
   });
+
+  document.getElementById('open-browser')?.addEventListener('click', openBrowser);
+  document.getElementById('close-browser')?.addEventListener('click', closeBrowser);
+  document.getElementById('browser-backdrop')?.addEventListener('click', closeBrowser);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && browserOpen) closeBrowser(); });
 
   let searchTimeout: ReturnType<typeof setTimeout>;
   let currentQuery = '';
   const searchInput = document.getElementById('item-search') as HTMLInputElement | null;
   searchInput?.addEventListener('input', () => {
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => { currentQuery = searchInput.value.trim(); loadItems(currentQuery || undefined); }, 300);
+    searchTimeout = setTimeout(() => {
+      currentQuery = searchInput!.value.trim();
+      if (currentQuery) loadItems(currentQuery);
+      else renderBrowserItems(allItems);
+    }, 300);
   });
 
   // ── Crafting refresh ───────────────────────────────────────────────────────
