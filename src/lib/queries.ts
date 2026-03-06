@@ -2,8 +2,9 @@
  * Named Flux query builders for the MC telemetry bucket.
  *
  * Range notes:
- *  - energy/machines poll every 5s → use -2m
- *  - AE polls every 60s (slow: 600s) → use -15m to tolerate slow-AE cycles
+ *  - "current state" queries use -24h so the dashboard always shows the last
+ *    known snapshot even if a collector node is temporarily offline.
+ *  - History/graph queries keep their proper windowed ranges.
  */
 
 import { queryFlux, INFLUX_BUCKET } from './influx';
@@ -19,7 +20,7 @@ export interface EnergySummary {
 export async function energySummary(): Promise<EnergySummary | null> {
   const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -2m)
+  |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "energy_total")
   |> filter(fn: (r) => r._field == "stored_fe" or r._field == "capacity_fe" or r._field == "percent")
   |> last()
@@ -42,7 +43,7 @@ export interface EnergyFlow {
 export async function energyFlow(): Promise<EnergyFlow[]> {
   const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -2m)
+  |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "energy_flow" and r._field == "rate_fe_t")
   |> last()
 `);
@@ -97,10 +98,9 @@ export interface AESummary {
 }
 
 export async function aeSummary(): Promise<AESummary | null> {
-  // AE polls every 60s; allow up to 15m for slow-AE cycles
   const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -15m)
+  |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "ae_summary")
   |> last()
   |> pivot(rowKey: ["_time", "node", "source"], columnKey: ["_field"], valueColumn: "_value")
@@ -131,7 +131,7 @@ export async function aeItems(filter?: string): Promise<AEItem[]> {
 
   const rows = await queryFlux(`
 ${importClause}from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -15m)
+  |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "ae_item" and r._field == "count")
   |> last()
 ${filterClause}  |> sort(columns: ["_value"], desc: true)
@@ -168,14 +168,14 @@ export async function aeCPUs(): Promise<AECPUs> {
   const [summaryRows, perCpuRows] = await Promise.all([
     queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -15m)
+  |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "ae_crafting_cpu")
   |> last()
   |> pivot(rowKey: ["_time", "node", "source"], columnKey: ["_field"], valueColumn: "_value")
 `),
     queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -15m)
+  |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "ae_cpu")
   |> last()
   |> pivot(rowKey: ["_time", "cpu", "node", "source"], columnKey: ["_field"], valueColumn: "_value")
@@ -212,7 +212,7 @@ export interface MachineSummary {
 export async function machineSummary(): Promise<MachineSummary | null> {
   const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -2m)
+  |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "machine_summary")
   |> filter(fn: (r) => r._field == "total_machines" or r._field == "active_machines" or r._field == "active_percent")
   |> last()
@@ -238,7 +238,7 @@ export interface MachineType {
 export async function machineTypes(): Promise<MachineType[]> {
   const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -2m)
+  |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "machine_type")
   |> filter(fn: (r) => r._field == "total_count" or r._field == "active_count" or r._field == "active_percent")
   |> filter(fn: (r) => r.type != "me_bridge")
@@ -271,7 +271,7 @@ export interface MekanismMachine {
 export async function mekanismMachines(): Promise<MekanismMachine[]> {
   const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -2m)
+  |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "machine_activity" and r.mod == "mekanism")
   |> filter(fn: (r) => r.type != "me_bridge")
   |> last()
@@ -307,14 +307,14 @@ export async function miMachines(): Promise<MIMachine[]> {
   const [activityRows, slotRows] = await Promise.all([
     queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -2m)
+  |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "machine_activity" and r.mod == "modern_industrialization")
   |> last()
   |> pivot(rowKey: ["_time", "name", "type", "mod", "node"], columnKey: ["_field"], valueColumn: "_value")
 `),
     queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -2m)
+  |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "mi_machine_slot_summary")
   |> last()
   |> pivot(rowKey: ["_time", "name", "type", "node"], columnKey: ["_field"], valueColumn: "_value")
@@ -387,7 +387,7 @@ export interface MIMachineFluid {
 export async function miMachineFluids(): Promise<MIMachineFluid[]> {
   const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -1m)
+  |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "mi_machine_fluid")
   |> last()
   |> pivot(rowKey: ["_time", "name", "type", "node", "fluid"], columnKey: ["_field"], valueColumn: "_value")
@@ -457,10 +457,11 @@ export interface CraftingJob {
 }
 
 export async function craftingJobs(): Promise<CraftingJob[]> {
-  // ae_crafting_job only exists while a job is running — look back 2m
+  // ae_crafting_job is only written while a job is actively running.
+  // Keep range tight (-5m) so completed jobs don't appear as "active".
   const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -2m)
+  |> range(start: -5m)
   |> filter(fn: (r) => r._measurement == "ae_crafting_job")
   |> last()
   |> pivot(rowKey: ["_time", "item", "cpu", "node"], columnKey: ["_field"], valueColumn: "_value")
