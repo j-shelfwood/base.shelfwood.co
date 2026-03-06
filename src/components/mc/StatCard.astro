@@ -31,9 +31,9 @@ const valueClass = colourMap[colour] ?? colourMap.white;
 ---
 
 <div class:list={['mc-panel flex flex-col gap-1', extraClass]}>
-  <span class="font-mc text-xs text-mc-muted uppercase tracking-wider">{label}</span>
+  <span class="font-mc text-sm text-mc-muted uppercase tracking-wider">{label}</span>
   <span
-    class:list={['font-mc text-2xl leading-tight', valueClass]}
+    class:list={['font-mc text-3xl leading-tight', valueClass]}
     id={id}
   >
     {value}{suffix}

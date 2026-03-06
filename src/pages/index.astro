@@ -139,8 +139,8 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   <section id="overview" class="mb-16 scroll-mt-16">
     <div class="mb-6 flex items-end justify-between">
       <div>
-        <h1 class="font-mc text-mc-white text-xl glow-diamond">OVERVIEW</h1>
-        <p class="font-mc text-xs text-mc-muted mt-1">ENERGY · STORAGE · MACHINES</p>
+        <h1 class="font-mc text-mc-white text-2xl glow-diamond">OVERVIEW</h1>
+        <p class="font-mc text-base text-mc-muted mt-1">ENERGY · STORAGE · MACHINES</p>
       </div>
     </div>
 
@@ -170,8 +170,8 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       {/* Energy */}
       <div class="mc-panel-raised px-4 py-3 flex flex-col gap-2">
         <div class="flex items-center justify-between">
-          <span class="font-mc text-xs text-mc-muted">ENERGY</span>
-          <span id="status-energy-badge" class={`font-mc text-[10px] px-1.5 py-0.5 ${energyStatus === 'OK' ? 'text-mc-emerald' : energyStatus === 'WARNING' ? 'text-mc-gold' : 'text-mc-redstone'}`}>
+          <span class="font-mc text-base text-mc-muted">ENERGY</span>
+          <span id="status-energy-badge" class={`font-mc text-base px-1.5 py-0.5 ${energyStatus === 'OK' ? 'text-mc-emerald' : energyStatus === 'WARNING' ? 'text-mc-gold' : 'text-mc-redstone'}`}>
             {energyStatus}
           </span>
         </div>
@@ -179,8 +179,8 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
           <div id="health-bar-energy" class={`mc-progress-fill ${energyPct < 20 ? 'bg-mc-redstone' : energyPct < 40 ? 'bg-mc-gold' : 'bg-mc-gold'}`} style={`width:${energyPct}%`} />
         </div>
         <div class="flex items-center justify-between">
-          <span id="health-val-energy" class="font-mc text-sm text-mc-gold">{energyPct.toFixed(1)}%</span>
-          <span class={`font-mc text-[10px] ${netFlow >= 0 ? 'text-mc-emerald' : 'text-mc-redstone'}`}>
+          <span id="health-val-energy" class="font-mc text-base text-mc-gold">{energyPct.toFixed(1)}%</span>
+          <span class={`font-mc text-base ${netFlow >= 0 ? 'text-mc-emerald' : 'text-mc-redstone'}`}>
             {netFlow >= 0 ? '▲' : '▼'} {Math.abs(netFlow) >= 1000 ? (Math.abs(netFlow)/1000).toFixed(1)+'K' : Math.abs(netFlow).toFixed(0)} FE/t
           </span>
         </div>
@@ -189,8 +189,8 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       {/* AE Network */}
       <div class="mc-panel-raised px-4 py-3 flex flex-col gap-2">
         <div class="flex items-center justify-between">
-          <span class="font-mc text-xs text-mc-muted">AE NETWORK</span>
-          <span id="status-ae-badge" class={`font-mc text-[10px] px-1.5 py-0.5 ${aeOnline ? 'text-mc-emerald' : 'text-mc-redstone'}`}>
+          <span class="font-mc text-base text-mc-muted">AE NETWORK</span>
+          <span id="status-ae-badge" class={`font-mc text-base px-1.5 py-0.5 ${aeOnline ? 'text-mc-emerald' : 'text-mc-redstone'}`}>
             {aeStatus}
           </span>
         </div>
@@ -198,8 +198,8 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
           <div id="health-bar-storage" class={`mc-progress-fill ${storageUsePct > 95 ? 'bg-mc-redstone' : storageUsePct > 80 ? 'bg-mc-gold' : 'bg-mc-diamond'}`} style={`width:${storageUsePct}%`} />
         </div>
         <div class="flex items-center justify-between">
-          <span id="health-val-storage" class="font-mc text-sm text-mc-diamond">{storageUsePct.toFixed(1)}% used</span>
-          <span id="status-storage-badge" class={`font-mc text-[10px] ${storageStatus === 'OK' ? 'text-mc-muted' : storageStatus === 'WARNING' ? 'text-mc-gold' : 'text-mc-redstone'}`}>
+          <span id="health-val-storage" class="font-mc text-base text-mc-diamond">{storageUsePct.toFixed(1)}% used</span>
+          <span id="status-storage-badge" class={`font-mc text-base ${storageStatus === 'OK' ? 'text-mc-muted' : storageStatus === 'WARNING' ? 'text-mc-gold' : 'text-mc-redstone'}`}>
             {storageStatus !== 'OK' ? storageStatus : ''}
           </span>
         </div>
@@ -208,8 +208,8 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       {/* Machines */}
       <div class="mc-panel-raised px-4 py-3 flex flex-col gap-2">
         <div class="flex items-center justify-between">
-          <span class="font-mc text-xs text-mc-muted">MACHINES</span>
-          <span id="status-mach-badge" class={`font-mc text-[10px] ${machineActiveCount > 0 ? 'text-mc-emerald' : 'text-mc-muted'}`}>
+          <span class="font-mc text-base text-mc-muted">MACHINES</span>
+          <span id="status-mach-badge" class={`font-mc text-base ${machineActiveCount > 0 ? 'text-mc-emerald' : 'text-mc-muted'}`}>
             {machineActiveCount > 0 ? 'ACTIVE' : 'IDLE'}
           </span>
         </div>
@@ -217,16 +217,16 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
           <div id="health-bar-machines" class="mc-progress-fill bg-mc-copper" style={`width:${machineTotalCount > 0 ? (machineActiveCount / machineTotalCount * 100) : 0}%`} />
         </div>
         <div class="flex items-center justify-between">
-          <span id="health-val-machines" class="font-mc text-sm text-mc-copper">{machineActiveCount} active</span>
-          <span class="font-mc text-[10px] text-mc-muted">{machineTotalCount} total</span>
+          <span id="health-val-machines" class="font-mc text-base text-mc-copper">{machineActiveCount} active</span>
+          <span class="font-mc text-base text-mc-muted">{machineTotalCount} total</span>
         </div>
       </div>
 
       {/* Crafting */}
       <div class="mc-panel-raised px-4 py-3 flex flex-col gap-2">
         <div class="flex items-center justify-between">
-          <span class="font-mc text-xs text-mc-muted">CRAFTING</span>
-          <span id="status-craft-badge" class={`font-mc text-[10px] ${cpus.busy > 0 ? 'text-mc-amethyst' : 'text-mc-muted'}`}>
+          <span class="font-mc text-base text-mc-muted">CRAFTING</span>
+          <span id="status-craft-badge" class={`font-mc text-base ${cpus.busy > 0 ? 'text-mc-amethyst' : 'text-mc-muted'}`}>
             {cpus.busy > 0 ? 'RUNNING' : 'IDLE'}
           </span>
         </div>
@@ -234,8 +234,8 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
           <div id="health-bar-crafting" class="mc-progress-fill bg-mc-amethyst" style={`width:${cpus.total > 0 ? (cpus.busy / cpus.total * 100) : 0}%`} />
         </div>
         <div class="flex items-center justify-between">
-          <span id="health-val-crafting" class="font-mc text-sm text-mc-amethyst">{cpus.busy}/{cpus.total} CPUs</span>
-          <span id="health-val-jobs" class="font-mc text-[10px] text-mc-muted">{jobs.length} job{jobs.length !== 1 ? 's' : ''}</span>
+          <span id="health-val-crafting" class="font-mc text-base text-mc-amethyst">{cpus.busy}/{cpus.total} CPUs</span>
+          <span id="health-val-jobs" class="font-mc text-base text-mc-muted">{jobs.length} job{jobs.length !== 1 ? 's' : ''}</span>
         </div>
       </div>
     </div>
@@ -261,8 +261,8 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   <section id="machines" class="mb-16 scroll-mt-16">
     <div class="mb-6 flex items-end justify-between">
       <div>
-        <h1 class="font-mc text-mc-white text-xl">MACHINES</h1>
-        <p class="font-mc text-xs text-mc-muted mt-1">MEKANISM · MODERN INDUSTRIALIZATION</p>
+        <h1 class="font-mc text-mc-white text-2xl">MACHINES</h1>
+        <p class="font-mc text-base text-mc-muted mt-1">MEKANISM · MODERN INDUSTRIALIZATION</p>
       </div>
     </div>
 
@@ -275,27 +275,27 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
 
     <Panel title="MEKANISM MACHINES" raised noPadding class="mb-6">
       <div id="mek-grid" class="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 items-start">
-        {Object.keys(mekByType).length === 0 && <p class="font-mc text-xs text-mc-muted py-2">No Mekanism machine data</p>}
+        {Object.keys(mekByType).length === 0 && <p class="font-mc text-base text-mc-muted py-2">No Mekanism machine data</p>}
         {Object.entries(mekByType).map(([type, machines]) => {
           const active = machines.filter(m => m.active).length;
           const col = colourFor(type);
           return (
             <div data-type-group={type}>
               <div class="flex items-center gap-3 mb-2">
-                <span class={`font-mc text-xs text-mc-${col} uppercase tracking-widest`}>{formatMachineType(type)}</span>
-                <span class="font-mc text-xs text-mc-muted">
+                <span class={`font-mc text-base text-mc-${col} uppercase tracking-widest`}>{formatMachineType(type)}</span>
+                <span class="font-mc text-base text-mc-muted">
                   <span class="text-mc-emerald" data-active-count={type}>{active}</span>/{machines.length}
                 </span>
               </div>
               <div class="flex flex-wrap gap-2">
                 {machines.map(m => (
                   <div class:list={['machine-cell group relative cursor-default transition-all duration-300',
-                    'pixel-border w-14 h-14 flex flex-col items-center justify-center gap-0.5',
+                    'pixel-border w-16 h-16 flex flex-col items-center justify-center gap-0.5',
                     m.active ? `bg-mc-${col}/20` : 'bg-mc-stone/40']}
                     data-machine={m.name} data-type={type}
                     data-active={m.active ? '1' : '0'} data-energy={m.energy_percent.toFixed(0)} data-progress={m.progress_percent.toFixed(0)}>
                     {m.active && <div class={`absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none`} />}
-                    <span class={`font-mc text-[8px] leading-none z-10 px-0.5 text-center truncate w-full ${m.active ? `text-mc-${col}` : 'text-mc-muted'}`}>
+                    <span class={`font-mc text-base leading-none z-10 px-0.5 text-center truncate w-full ${m.active ? `text-mc-${col}` : 'text-mc-muted'}`}>
                       {m.name.replace(/_/g, ' ').replace(/mekanism /i, '').slice(0, 10)}
                     </span>
                     <span class:list={['w-1.5 h-1.5 z-10', m.active ? 'bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]' : 'bg-mc-stone']} />
@@ -303,12 +303,12 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
                       <div class="h-full bg-mc-gold transition-all duration-500" style={`width:${Math.min(100, m.energy_percent)}%`} />
                     </div>
                     <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
-                      <span class="font-mc text-[9px] text-mc-white capitalize">{m.name.replace(/_/g, ' ')}</span>
-                      <span class={`font-mc text-[9px] ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}`}>{m.active ? 'ACTIVE' : 'IDLE'}</span>
+                      <span class="font-mc text-base text-mc-white capitalize">{m.name.replace(/_/g, ' ')}</span>
+                      <span class={`font-mc text-base ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}`}>{m.active ? 'ACTIVE' : 'IDLE'}</span>
                       <div class="flex items-center gap-1 mt-0.5">
-                        <span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span>
+                        <span class="font-mc text-base text-mc-gold w-10">ENERGY</span>
                         <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style={`width:${Math.min(100, m.energy_percent)}%`} /></div>
-                        <span class="font-mc text-[8px] text-mc-gold">{m.energy_percent.toFixed(0)}%</span>
+                        <span class="font-mc text-base text-mc-gold">{m.energy_percent.toFixed(0)}%</span>
                       </div>
                     </div>
                   </div>
@@ -322,17 +322,17 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
 
     <Panel title="MODERN INDUSTRIALIZATION" raised noPadding>
       <div id="mi-grid" class="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 items-start">
-        {Object.keys(miByType).length === 0 && <p class="font-mc text-xs text-mc-muted py-2">No MI machine data</p>}
+        {Object.keys(miByType).length === 0 && <p class="font-mc text-base text-mc-muted py-2">No MI machine data</p>}
         {Object.entries(miByType).map(([type, machines]) => {
           const active = machines.filter(m => m.active).length;
           const col = miColourFor(type.replace('modern_industrialization:', '').replace(/_/g, ' '));
           return (
             <div data-type-group={type}>
               <div class="flex items-center gap-3 mb-2">
-                <span class={`font-mc text-xs text-mc-${col} uppercase tracking-widest`}>
+                <span class={`font-mc text-base text-mc-${col} uppercase tracking-widest`}>
                   {type.replace('modern_industrialization:', '').replace(/_/g, ' ')}
                 </span>
-                <span class="font-mc text-xs text-mc-muted">
+                <span class="font-mc text-base text-mc-muted">
                   <span class="text-mc-emerald" data-active-count={type}>{active}</span>/{machines.length}
                 </span>
               </div>
@@ -344,13 +344,13 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
                   const barColour = isSteam ? 'var(--color-mc-diamond)' : 'var(--color-mc-gold)';
                   return (
                     <div class:list={['machine-cell group relative cursor-default transition-all duration-300',
-                      'pixel-border w-14 h-14 flex flex-col items-center justify-center gap-0.5',
+                      'pixel-border w-16 h-16 flex flex-col items-center justify-center gap-0.5',
                       m.active ? `bg-mc-${col}/20` : 'bg-mc-stone/40']}
                       data-machine={m.name} data-type={type}
                       data-active={m.active ? '1' : '0'} data-energy={m.energy_percent.toFixed(0)}
                       data-occupied={m.occupied_slots ?? 0} data-total-slots={m.total_slots ?? 0}>
                       {m.active && <div class={`absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none`} />}
-                      <span class={`font-mc text-[8px] leading-none z-10 px-0.5 text-center truncate w-full ${m.active ? `text-mc-${col}` : 'text-mc-muted'}`}>
+                      <span class={`font-mc text-base leading-none z-10 px-0.5 text-center truncate w-full ${m.active ? `text-mc-${col}` : 'text-mc-muted'}`}>
                         {m.name.replace(/_/g, ' ').replace(/modern industrialization /i, '').slice(0, 10)}
                       </span>
                       <span class:list={['w-1.5 h-1.5 z-10', m.active ? 'bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]' : 'bg-mc-stone']} />
@@ -358,19 +358,19 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
                         <div class="h-full transition-all duration-500" style={`width:${Math.min(100, barPct)}%;background-color:${barColour}`} />
                       </div>
                       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
-                        <span class="font-mc text-[9px] text-mc-white capitalize">{m.name.replace(/_/g, ' ')}</span>
-                        <span class={`font-mc text-[9px] ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}`}>{m.active ? 'ACTIVE' : 'IDLE'}</span>
+                        <span class="font-mc text-base text-mc-white capitalize">{m.name.replace(/_/g, ' ')}</span>
+                        <span class={`font-mc text-base ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}`}>{m.active ? 'ACTIVE' : 'IDLE'}</span>
                         {!isSteam && (
                           <div class="flex items-center gap-1 mt-0.5">
-                            <span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span>
+                            <span class="font-mc text-base text-mc-gold w-10">ENERGY</span>
                             <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style={`width:${Math.min(100, m.energy_percent)}%`} /></div>
-                            <span class="font-mc text-[8px] text-mc-gold">{m.energy_percent.toFixed(0)}%</span>
+                            <span class="font-mc text-base text-mc-gold">{m.energy_percent.toFixed(0)}%</span>
                           </div>
                         )}
                         {m.occupied_slots != null && m.total_slots != null && (
                           <div class="flex items-center gap-1">
-                            <span class="font-mc text-[8px] text-mc-diamond w-10">SLOTS</span>
-                            <span class="font-mc text-[8px] text-mc-diamond">{m.occupied_slots}/{m.total_slots}</span>
+                            <span class="font-mc text-base text-mc-diamond w-10">SLOTS</span>
+                            <span class="font-mc text-base text-mc-diamond">{m.occupied_slots}/{m.total_slots}</span>
                           </div>
                         )}
                       </div>
@@ -389,8 +389,8 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   <section id="storage" class="mb-16 scroll-mt-16">
     <div class="mb-6 flex items-end justify-between gap-4 flex-wrap">
       <div>
-        <h1 class="font-mc text-mc-white text-xl">STORAGE</h1>
-        <p class="font-mc text-xs text-mc-muted mt-1">AE2 NETWORK OVERVIEW</p>
+        <h1 class="font-mc text-mc-white text-2xl">STORAGE</h1>
+        <p class="font-mc text-base text-mc-muted mt-1">AE2 NETWORK OVERVIEW</p>
       </div>
     </div>
 
@@ -429,8 +429,8 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
                     return (
                       <div class="px-4 py-2 flex flex-col gap-1">
                         <div class="flex items-center justify-between">
-                          <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(v.item)}</span>
-                          <span class="font-mc text-xs text-mc-emerald">+{fmt(v.delta)}</span>
+                          <span class="font-mc text-base text-mc-white capitalize">{itemLabel(v.item)}</span>
+                          <span class="font-mc text-base text-mc-emerald">+{fmt(v.delta)}</span>
                         </div>
                         <div class="mc-progress-track">
                           <div class="mc-progress-fill" style={`width:${pct}%;background-color:var(--color-mc-emerald);opacity:0.6`} />
@@ -438,7 +438,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
                       </div>
                     );
                   })
-                : <p class="font-mc text-xs text-mc-muted px-4 py-4">No production detected</p>;
+                : <p class="font-mc text-base text-mc-muted px-4 py-4">No production detected</p>;
             })()}
           </div>
         </Panel>
@@ -455,8 +455,8 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
                     return (
                       <div class="px-4 py-2 flex flex-col gap-1">
                         <div class="flex items-center justify-between">
-                          <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(v.item)}</span>
-                          <span class="font-mc text-xs text-mc-redstone">{fmt(v.delta)}</span>
+                          <span class="font-mc text-base text-mc-white capitalize">{itemLabel(v.item)}</span>
+                          <span class="font-mc text-base text-mc-redstone">{fmt(v.delta)}</span>
                         </div>
                         <div class="mc-progress-track">
                           <div class="mc-progress-fill" style={`width:${pct}%;background-color:var(--color-mc-redstone);opacity:0.6`} />
@@ -464,7 +464,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
                       </div>
                     );
                   })
-                : <p class="font-mc text-xs text-mc-muted px-4 py-4">No consumption detected</p>;
+                : <p class="font-mc text-base text-mc-muted px-4 py-4">No consumption detected</p>;
             })()}
           </div>
         </Panel>
@@ -476,16 +476,16 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
         {items.slice(0, 20).map(item => (
           <div class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors">
             <div class="flex flex-col gap-0.5">
-              <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(item.item)}</span>
-              <span class="font-mc text-[10px] text-mc-muted">{item.item}</span>
+              <span class="font-mc text-base text-mc-white capitalize">{itemLabel(item.item)}</span>
+              <span class="font-mc text-base text-mc-muted">{item.item}</span>
             </div>
-            <span class="font-mc text-sm text-mc-diamond shrink-0">{fmt(item.count)}</span>
+            <span class="font-mc text-base text-mc-diamond shrink-0">{fmt(item.count)}</span>
           </div>
         ))}
-        {items.length === 0 && <p class="font-mc text-xs text-mc-muted px-4 py-6">No items found</p>}
+        {items.length === 0 && <p class="font-mc text-base text-mc-muted px-4 py-6">No items found</p>}
       </div>
       <div class="px-4 py-3 border-t border-mc-cobble/50">
-        <button id="open-browser" class="mc-slot px-4 py-2 font-mc text-xs text-mc-diamond hover:text-mc-white w-full">
+        <button id="open-browser" class="mc-slot px-4 py-2 font-mc text-base text-mc-diamond hover:text-mc-white w-full">
           BROWSE ALL ITEMS ({items.length} types) →
         </button>
       </div>
@@ -500,29 +500,29 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     <div class="absolute inset-4 md:inset-8 lg:inset-16 bg-mc-deep flex flex-col pixel-border overflow-hidden">
       <!-- Header -->
       <div class="flex items-center gap-3 px-4 py-3 border-b-2 border-mc-cobble shrink-0">
-        <span class="font-mc text-mc-diamond text-sm">ITEM BROWSER</span>
+        <span class="font-mc text-mc-diamond text-base">ITEM BROWSER</span>
         <div class="flex items-center gap-1 ml-2">
-          <button id="br-sort-count" class="mc-slot px-3 py-1 font-mc text-xs text-mc-diamond">COUNT ▼</button>
-          <button id="br-sort-name"  class="mc-slot px-3 py-1 font-mc text-xs text-mc-muted">NAME</button>
+          <button id="br-sort-count" class="mc-slot px-3 py-1 font-mc text-base text-mc-diamond">COUNT ▼</button>
+          <button id="br-sort-name"  class="mc-slot px-3 py-1 font-mc text-base text-mc-muted">NAME</button>
         </div>
         <div class="mc-slot px-3 py-1.5 flex items-center gap-2 flex-1 max-w-xs">
-          <span class="font-mc text-xs text-mc-muted">SEARCH:</span>
+          <span class="font-mc text-base text-mc-muted">SEARCH:</span>
           <input id="item-search" type="text" placeholder="iron ingot..."
-            class="bg-transparent font-mc text-xs text-mc-white outline-none placeholder:text-mc-stone flex-1 min-w-0"
+            class="bg-transparent font-mc text-base text-mc-white outline-none placeholder:text-mc-stone flex-1 min-w-0"
             autocomplete="off" />
         </div>
-        <span id="br-count" class="font-mc text-xs text-mc-muted ml-auto"></span>
-        <button id="close-browser" class="mc-slot px-3 py-1.5 font-mc text-xs text-mc-redstone hover:text-mc-white ml-2">✕ CLOSE</button>
+        <span id="br-count" class="font-mc text-base text-mc-muted ml-auto"></span>
+        <button id="close-browser" class="mc-slot px-3 py-1.5 font-mc text-base text-mc-redstone hover:text-mc-white ml-2">✕ CLOSE</button>
       </div>
       <!-- Scrollable list -->
       <div id="item-list" class="flex-1 overflow-y-auto divide-y divide-mc-cobble/50">
         {items.map(item => (
           <div class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors">
             <div class="flex flex-col gap-0.5">
-              <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(item.item)}</span>
-              <span class="font-mc text-[10px] text-mc-muted">{item.item}</span>
+              <span class="font-mc text-base text-mc-white capitalize">{itemLabel(item.item)}</span>
+              <span class="font-mc text-base text-mc-muted">{item.item}</span>
             </div>
-            <span class="font-mc text-sm text-mc-diamond shrink-0">{fmt(item.count)}</span>
+            <span class="font-mc text-base text-mc-diamond shrink-0">{fmt(item.count)}</span>
           </div>
         ))}
       </div>
@@ -533,8 +533,8 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   <section id="crafting" class="mb-16 scroll-mt-16">
     <div class="mb-6 flex items-end justify-between">
       <div>
-        <h1 class="font-mc text-mc-white text-xl">CRAFTING</h1>
-        <p class="font-mc text-xs text-mc-muted mt-1">CPU STATUS</p>
+        <h1 class="font-mc text-mc-white text-2xl">CRAFTING</h1>
+        <p class="font-mc text-base text-mc-muted mt-1">CPU STATUS</p>
       </div>
     </div>
 
@@ -547,49 +547,49 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
 
     <Panel title="CPU GRID" raised>
       <div id="cpu-grid" class="flex flex-wrap gap-3">
-        {enrichedCpus.length === 0 && <p class="font-mc text-xs text-mc-muted py-2">No CPU data</p>}
+        {enrichedCpus.length === 0 && <p class="font-mc text-base text-mc-muted py-2">No CPU data</p>}
         {enrichedCpus.map((cpu, i) => (
           <div class:list={['group relative cursor-default pixel-border transition-all duration-300',
             'flex flex-col items-center justify-center gap-1',
-            cpu.job ? 'w-32 h-28' : 'w-20 h-20',
+            cpu.job ? 'w-36 h-32' : 'w-24 h-24',
             cpu.busy ? 'bg-mc-amethyst/20' : 'bg-mc-stone/40']}
             data-cpu={cpu.name} data-cpu-index={i + 1} data-busy={cpu.busy ? '1' : '0'}>
             {cpu.busy && <div class="absolute inset-0 animate-pulse opacity-10 bg-mc-amethyst pointer-events-none" />}
-            <span class={`font-mc text-[10px] z-10 ${cpu.busy ? 'text-mc-amethyst' : 'text-mc-muted'}`}>
+            <span class={`font-mc text-base z-10 ${cpu.busy ? 'text-mc-amethyst' : 'text-mc-muted'}`}>
               {cpu.name.replace(/[^0-9]/g, '') || cpu.name.slice(-2)}
             </span>
             <span class:list={['w-2 h-2 z-10', cpu.busy ? 'bg-mc-emerald shadow-[0_0_6px_var(--color-mc-emerald)]' : 'bg-mc-stone']} />
             {cpu.job ? (
               <div class="flex flex-col items-center gap-0.5 z-10 px-1 w-full">
-                <span class="font-mc text-[8px] text-mc-emerald">BUSY</span>
-                <span class="font-mc text-[8px] text-mc-white capitalize text-center leading-tight line-clamp-2">{itemLabel(cpu.job.item)}</span>
-                <span class="font-mc text-[9px] text-mc-amethyst">×{fmtQty(cpu.job.quantity)}</span>
+                <span class="font-mc text-base text-mc-emerald">BUSY</span>
+                <span class="font-mc text-base text-mc-white capitalize text-center leading-tight line-clamp-2">{itemLabel(cpu.job.item)}</span>
+                <span class="font-mc text-base text-mc-amethyst">×{fmtQty(cpu.job.quantity)}</span>
               </div>
             ) : (
-              <span class={`font-mc text-[8px] z-10 ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}`}>{cpu.busy ? 'BUSY' : 'FREE'}</span>
+              <span class={`font-mc text-base z-10 ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}`}>{cpu.busy ? 'BUSY' : 'FREE'}</span>
             )}
             <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
               <div class="h-full bg-mc-lapis transition-all duration-500" style={`width:${Math.min(100, cpu.coProcessors * 10)}%`} />
             </div>
             <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-44 pointer-events-none">
-              <span class="font-mc text-[9px] text-mc-white">{cpu.name}</span>
-              <span class={`font-mc text-[9px] ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}`}>{cpu.busy ? 'BUSY' : 'FREE'}</span>
+              <span class="font-mc text-base text-mc-white">{cpu.name}</span>
+              <span class={`font-mc text-base ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}`}>{cpu.busy ? 'BUSY' : 'FREE'}</span>
               {cpu.job && (
                 <>
                   <div class="border-t border-mc-cobble/50 my-0.5" />
-                  <span class="font-mc text-[9px] text-mc-white capitalize">{itemLabel(cpu.job.item)}</span>
-                  <span class="font-mc text-[8px] text-mc-muted">{cpu.job.item}</span>
-                  <span class="font-mc text-[8px] text-mc-amethyst">qty: {cpu.job.quantity.toLocaleString()}</span>
+                  <span class="font-mc text-base text-mc-white capitalize">{itemLabel(cpu.job.item)}</span>
+                  <span class="font-mc text-base text-mc-muted">{cpu.job.item}</span>
+                  <span class="font-mc text-base text-mc-amethyst">qty: {cpu.job.quantity.toLocaleString()}</span>
                 </>
               )}
               <div class="border-t border-mc-cobble/50 my-0.5" />
               <div class="flex items-center gap-2">
-                <span class="font-mc text-[8px] text-mc-diamond w-14">STORAGE</span>
-                <span class="font-mc text-[8px] text-mc-white">{fmtBytes(cpu.storage)}B</span>
+                <span class="font-mc text-base text-mc-diamond w-14">STORAGE</span>
+                <span class="font-mc text-base text-mc-white">{fmtBytes(cpu.storage)}B</span>
               </div>
               <div class="flex items-center gap-2">
-                <span class="font-mc text-[8px] text-mc-lapis w-14">CO-PROCS</span>
-                <span class="font-mc text-[8px] text-mc-white">{cpu.coProcessors}</span>
+                <span class="font-mc text-base text-mc-lapis w-14">CO-PROCS</span>
+                <span class="font-mc text-base text-mc-white">{cpu.coProcessors}</span>
               </div>
             </div>
           </div>
@@ -697,7 +697,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       setEl('health-val-energy', energyPct.toFixed(1) + '%');
       const badge = document.getElementById('status-energy-badge');
       const estatus = energyPct < 20 ? 'CRITICAL' : energyPct < 40 ? 'WARNING' : 'OK';
-      if (badge) { badge.textContent = estatus; badge.className = `font-mc text-[10px] px-1.5 py-0.5 ${estatus === 'OK' ? 'text-mc-emerald' : estatus === 'WARNING' ? 'text-mc-gold' : 'text-mc-redstone'}`; }
+      if (badge) { badge.textContent = estatus; badge.className = `font-mc text-base px-1.5 py-0.5 ${estatus === 'OK' ? 'text-mc-emerald' : estatus === 'WARNING' ? 'text-mc-gold' : 'text-mc-redstone'}`; }
     }
     // Storage bar + label
     {
@@ -705,10 +705,10 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       if (bar) { bar.style.width = `${storageUsePct}%`; bar.className = `mc-progress-fill ${storageUsePct > 95 ? 'bg-mc-redstone' : storageUsePct > 80 ? 'bg-mc-gold' : 'bg-mc-diamond'}`; }
       setEl('health-val-storage', storageUsePct.toFixed(1) + '% used');
       const aeBadge = document.getElementById('status-ae-badge');
-      if (aeBadge) { aeBadge.textContent = aeOnline ? 'OK' : 'OFFLINE'; aeBadge.className = `font-mc text-[10px] px-1.5 py-0.5 ${aeOnline ? 'text-mc-emerald' : 'text-mc-redstone'}`; }
+      if (aeBadge) { aeBadge.textContent = aeOnline ? 'OK' : 'OFFLINE'; aeBadge.className = `font-mc text-base px-1.5 py-0.5 ${aeOnline ? 'text-mc-emerald' : 'text-mc-redstone'}`; }
       const stBadge = document.getElementById('status-storage-badge');
       const sstatus = storageUsePct > 95 ? 'CRITICAL' : storageUsePct > 80 ? 'WARNING' : 'OK';
-      if (stBadge) { stBadge.textContent = sstatus !== 'OK' ? sstatus : ''; stBadge.className = `font-mc text-[10px] ${sstatus === 'WARNING' ? 'text-mc-gold' : 'text-mc-redstone'}`; }
+      if (stBadge) { stBadge.textContent = sstatus !== 'OK' ? sstatus : ''; stBadge.className = `font-mc text-base ${sstatus === 'WARNING' ? 'text-mc-gold' : 'text-mc-redstone'}`; }
     }
     // Machines bar + label
     {
@@ -716,7 +716,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       if (bar) bar.style.width = `${machTotal > 0 ? (machActive / machTotal * 100) : 0}%`;
       setEl('health-val-machines', machActive + ' active');
       const badge = document.getElementById('status-mach-badge');
-      if (badge) { badge.textContent = machActive > 0 ? 'ACTIVE' : 'IDLE'; badge.className = `font-mc text-[10px] ${machActive > 0 ? 'text-mc-emerald' : 'text-mc-muted'}`; }
+      if (badge) { badge.textContent = machActive > 0 ? 'ACTIVE' : 'IDLE'; badge.className = `font-mc text-base ${machActive > 0 ? 'text-mc-emerald' : 'text-mc-muted'}`; }
     }
   }
 
@@ -748,16 +748,16 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     const name = m.name.replace(/_/g, ' ').replace(/mekanism /i, '').slice(0, 10);
     const pctE = Math.min(100, m.energy_percent);
     return `${m.active ? `<div class="absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none"></div>` : ''}
-      <span class="font-mc text-[8px] leading-none z-10 px-0.5 text-center w-full truncate ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">${name}</span>
+      <span class="font-mc text-base leading-none z-10 px-0.5 text-center w-full truncate ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">${name}</span>
       <span class="w-1.5 h-1.5 z-10 ${m.active ? `bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]` : 'bg-mc-stone'}"></span>
       <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${pctE}%"></div></div>
       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
-        <span class="font-mc text-[9px] text-mc-white capitalize">${m.name.replace(/_/g, ' ')}</span>
-        <span class="font-mc text-[9px] ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
+        <span class="font-mc text-base text-mc-white capitalize">${m.name.replace(/_/g, ' ')}</span>
+        <span class="font-mc text-base ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
         <div class="flex items-center gap-1 mt-0.5">
-          <span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span>
+          <span class="font-mc text-base text-mc-gold w-10">ENERGY</span>
           <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${pctE}%"></div></div>
-          <span class="font-mc text-[8px] text-mc-gold">${pctE.toFixed(0)}%</span>
+          <span class="font-mc text-base text-mc-gold">${pctE.toFixed(0)}%</span>
         </div>
       </div>`;
   }
@@ -768,15 +768,15 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     const slotPct = m.total_slots ? Math.min(100, (m.occupied_slots ?? 0) / m.total_slots * 100) : 0;
     const barPct = isSteam ? slotPct : Math.min(100, m.energy_percent);
     const barC = isSteam ? 'var(--color-mc-diamond)' : 'var(--color-mc-gold)';
-    const energyRow = !isSteam ? `<div class="flex items-center gap-1 mt-0.5"><span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span><div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${barPct}%"></div></div><span class="font-mc text-[8px] text-mc-gold">${barPct.toFixed(0)}%</span></div>` : '';
-    const slotsRow = m.occupied_slots != null && m.total_slots != null ? `<div class="flex items-center gap-1"><span class="font-mc text-[8px] text-mc-diamond w-10">SLOTS</span><span class="font-mc text-[8px] text-mc-diamond">${m.occupied_slots}/${m.total_slots}</span></div>` : '';
+    const energyRow = !isSteam ? `<div class="flex items-center gap-1 mt-0.5"><span class="font-mc text-base text-mc-gold w-10">ENERGY</span><div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${barPct}%"></div></div><span class="font-mc text-base text-mc-gold">${barPct.toFixed(0)}%</span></div>` : '';
+    const slotsRow = m.occupied_slots != null && m.total_slots != null ? `<div class="flex items-center gap-1"><span class="font-mc text-base text-mc-diamond w-10">SLOTS</span><span class="font-mc text-base text-mc-diamond">${m.occupied_slots}/${m.total_slots}</span></div>` : '';
     return `${m.active ? `<div class="absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none"></div>` : ''}
-      <span class="font-mc text-[8px] leading-none z-10 px-0.5 text-center w-full truncate ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">${name}</span>
+      <span class="font-mc text-base leading-none z-10 px-0.5 text-center w-full truncate ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">${name}</span>
       <span class="w-1.5 h-1.5 z-10 ${m.active ? `bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]` : 'bg-mc-stone'}"></span>
       <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow"><div class="h-full transition-all" style="width:${barPct}%;background-color:${barC}"></div></div>
       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
-        <span class="font-mc text-[9px] text-mc-white capitalize">${m.name.replace(/_/g, ' ')}</span>
-        <span class="font-mc text-[9px] ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
+        <span class="font-mc text-base text-mc-white capitalize">${m.name.replace(/_/g, ' ')}</span>
+        <span class="font-mc text-base ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
         ${energyRow}${slotsRow}
       </div>`;
   }
@@ -799,7 +799,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       if (header) { header.textContent = String(active); }
       let cells = groupEl.querySelector('.flex.flex-wrap') as HTMLElement | null;
       if (!cells) {
-        groupEl.innerHTML = `<div class="flex items-center gap-3 mb-2"><span class="font-mc text-xs text-mc-${col} uppercase tracking-widest">${getLabel(type)}</span><span class="font-mc text-xs text-mc-muted"><span class="text-mc-emerald" data-active-count="${type}">${active}</span>/${group.length}</span></div><div class="flex flex-wrap gap-2"></div>`;
+        groupEl.innerHTML = `<div class="flex items-center gap-3 mb-2"><span class="font-mc text-base text-mc-${col} uppercase tracking-widest">${getLabel(type)}</span><span class="font-mc text-base text-mc-muted"><span class="text-mc-emerald" data-active-count="${type}">${active}</span>/${group.length}</span></div><div class="flex flex-wrap gap-2"></div>`;
         cells = groupEl.querySelector('.flex.flex-wrap');
       }
       if (!cells) continue;
@@ -809,7 +809,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
         if (!cell) { cell = document.createElement('div'); cells.appendChild(cell); }
         cell.dataset.machine = m.name; cell.dataset.active = m.active ? '1' : '0';
         cell.innerHTML = buildCell(m, col);
-        cell.className = `machine-cell group relative cursor-default transition-all duration-300 pixel-border w-14 h-14 flex flex-col items-center justify-center gap-0.5 ${m.active ? `bg-mc-${col}/20` : 'bg-mc-stone/40'}`;
+        cell.className = `machine-cell group relative cursor-default transition-all duration-300 pixel-border w-16 h-16 flex flex-col items-center justify-center gap-0.5 ${m.active ? `bg-mc-${col}/20` : 'bg-mc-stone/40'}`;
         if (wasActive !== m.active) {
           cell.classList.add(m.active ? 'animate-ping-once' : 'opacity-50');
           setTimeout(() => cell!.classList.remove('animate-ping-once', 'opacity-50'), 600);
@@ -848,21 +848,21 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     const btnN = document.getElementById('br-sort-name');
     if (btnC) {
       btnC.textContent = 'COUNT' + (sortMode === 'count' ? (sortDir === 'desc' ? ' ▼' : ' ▲') : '');
-      btnC.className = `mc-slot px-3 py-1 font-mc text-xs ${sortMode === 'count' ? 'text-mc-diamond' : 'text-mc-muted'}`;
+      btnC.className = `mc-slot px-3 py-1 font-mc text-base ${sortMode === 'count' ? 'text-mc-diamond' : 'text-mc-muted'}`;
     }
     if (btnN) {
       btnN.textContent = 'NAME' + (sortMode === 'name' ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
-      btnN.className = `mc-slot px-3 py-1 font-mc text-xs ${sortMode === 'name' ? 'text-mc-diamond' : 'text-mc-muted'}`;
+      btnN.className = `mc-slot px-3 py-1 font-mc text-base ${sortMode === 'name' ? 'text-mc-diamond' : 'text-mc-muted'}`;
     }
   }
 
   function renderRow(i: { item: string; count: number }) {
     return `<div class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors">
       <div class="flex flex-col gap-0.5">
-        <span class="font-mc text-xs text-mc-white capitalize">${itemLabel(i.item)}</span>
-        <span class="font-mc text-[10px] text-mc-muted">${i.item}</span>
+        <span class="font-mc text-base text-mc-white capitalize">${itemLabel(i.item)}</span>
+        <span class="font-mc text-base text-mc-muted">${i.item}</span>
       </div>
-      <span class="font-mc text-sm text-mc-diamond">${fmt(i.count)}</span>
+      <span class="font-mc text-base text-mc-diamond">${fmt(i.count)}</span>
     </div>`;
   }
 
@@ -871,7 +871,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     if (!el) return;
     const top = [...items].sort((a, b) => b.count - a.count).slice(0, 20);
     el.innerHTML = top.length === 0
-      ? '<p class="font-mc text-xs text-mc-muted px-4 py-6">No items found</p>'
+      ? '<p class="font-mc text-base text-mc-muted px-4 py-6">No items found</p>'
       : top.map(renderRow).join('');
     const btn = document.getElementById('open-browser');
     if (btn) btn.textContent = `BROWSE ALL ITEMS (${items.length} types) →`;
@@ -884,7 +884,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     const sorted = sortItems(items);
     if (countEl) countEl.textContent = `${sorted.length} types`;
     list.innerHTML = sorted.length === 0
-      ? '<p class="font-mc text-xs text-mc-muted px-4 py-6">No items found</p>'
+      ? '<p class="font-mc text-base text-mc-muted px-4 py-6">No items found</p>'
       : sorted.map(renderRow).join('');
   }
 
@@ -922,13 +922,13 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     const container = panel.querySelector('.divide-y') as HTMLElement | null;
     if (!container) return;
     const filtered = items.filter(v => Math.sign(v.delta) === sign);
-    if (filtered.length === 0) { container.innerHTML = `<p class="font-mc text-xs text-mc-muted px-4 py-4">${emptyMsg}</p>`; return; }
+    if (filtered.length === 0) { container.innerHTML = `<p class="font-mc text-base text-mc-muted px-4 py-4">${emptyMsg}</p>`; return; }
     const max = Math.abs(filtered[0]?.delta ?? 1);
     container.innerHTML = filtered.slice(0, 8).map(v => {
       const pct = Math.min(100, (Math.abs(v.delta) / max) * 100);
       const label = v.item.replace(/^.*:/, '').replace(/_/g, ' ');
       const fmtDelta = sign === 1 ? `+${fmt(v.delta)}` : fmt(v.delta);
-      return `<div class="px-4 py-2 flex flex-col gap-1"><div class="flex items-center justify-between"><span class="font-mc text-xs text-mc-white capitalize">${label}</span><span class="font-mc text-xs ${colour}">${fmtDelta}</span></div><div class="mc-progress-track"><div class="mc-progress-fill" style="width:${pct}%;background-color:${colour === 'text-mc-emerald' ? 'var(--color-mc-emerald)' : 'var(--color-mc-redstone)'};opacity:0.6"></div></div></div>`;
+      return `<div class="px-4 py-2 flex flex-col gap-1"><div class="flex items-center justify-between"><span class="font-mc text-base text-mc-white capitalize">${label}</span><span class="font-mc text-base ${colour}">${fmtDelta}</span></div><div class="mc-progress-track"><div class="mc-progress-fill" style="width:${pct}%;background-color:${colour === 'text-mc-emerald' ? 'var(--color-mc-emerald)' : 'var(--color-mc-redstone)'};opacity:0.6"></div></div></div>`;
     }).join('');
   }
 
@@ -974,22 +974,22 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     const coproPct = Math.min(100, cpu.coProcessors * 10);
     const hasJob = job !== null;
     const itemLine = hasJob
-      ? `<div class="flex flex-col items-center gap-0.5 z-10 px-1 w-full"><span class="font-mc text-[8px] text-mc-emerald">BUSY</span><span class="font-mc text-[8px] text-mc-white capitalize text-center leading-tight" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${itemLabel(job!.item)}</span><span class="font-mc text-[9px] text-mc-amethyst">×${fmtQty(job!.quantity)}</span></div>`
-      : `<span class="font-mc text-[8px] z-10 ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}">${cpu.busy ? 'BUSY' : 'FREE'}</span>`;
+      ? `<div class="flex flex-col items-center gap-0.5 z-10 px-1 w-full"><span class="font-mc text-base text-mc-emerald">BUSY</span><span class="font-mc text-base text-mc-white capitalize text-center leading-tight" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${itemLabel(job!.item)}</span><span class="font-mc text-base text-mc-amethyst">×${fmtQty(job!.quantity)}</span></div>`
+      : `<span class="font-mc text-base z-10 ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}">${cpu.busy ? 'BUSY' : 'FREE'}</span>`;
     const jobTooltip = hasJob
-      ? `<div class="border-t border-mc-cobble/50 my-0.5"></div><span class="font-mc text-[9px] text-mc-white capitalize">${itemLabel(job!.item)}</span><span class="font-mc text-[8px] text-mc-muted">${job!.item}</span><span class="font-mc text-[8px] text-mc-amethyst">qty: ${job!.quantity.toLocaleString()}</span>` : '';
+      ? `<div class="border-t border-mc-cobble/50 my-0.5"></div><span class="font-mc text-base text-mc-white capitalize">${itemLabel(job!.item)}</span><span class="font-mc text-base text-mc-muted">${job!.item}</span><span class="font-mc text-base text-mc-amethyst">qty: ${job!.quantity.toLocaleString()}</span>` : '';
     return `${cpu.busy ? `<div class="absolute inset-0 animate-pulse opacity-10 bg-mc-amethyst pointer-events-none"></div>` : ''}
-      <span class="font-mc text-[10px] z-10 ${cpu.busy ? 'text-mc-amethyst' : 'text-mc-muted'}">${num}</span>
+      <span class="font-mc text-base z-10 ${cpu.busy ? 'text-mc-amethyst' : 'text-mc-muted'}">${num}</span>
       <span class="w-2 h-2 z-10 ${cpu.busy ? 'bg-mc-emerald shadow-[0_0_6px_var(--color-mc-emerald)]' : 'bg-mc-stone'}"></span>
       ${itemLine}
       <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow"><div class="h-full bg-mc-lapis" style="width:${coproPct}%"></div></div>
       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-44 pointer-events-none">
-        <span class="font-mc text-[9px] text-mc-white">${cpu.name}</span>
-        <span class="font-mc text-[9px] ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}">${cpu.busy ? 'BUSY' : 'FREE'}</span>
+        <span class="font-mc text-base text-mc-white">${cpu.name}</span>
+        <span class="font-mc text-base ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}">${cpu.busy ? 'BUSY' : 'FREE'}</span>
         ${jobTooltip}
         <div class="border-t border-mc-cobble/50 my-0.5"></div>
-        <div class="flex items-center gap-2"><span class="font-mc text-[8px] text-mc-diamond w-14">STORAGE</span><span class="font-mc text-[8px] text-mc-white">${fmtBytes(cpu.storage)}B</span></div>
-        <div class="flex items-center gap-2"><span class="font-mc text-[8px] text-mc-lapis w-14">CO-PROCS</span><span class="font-mc text-[8px] text-mc-white">${cpu.coProcessors}</span></div>
+        <div class="flex items-center gap-2"><span class="font-mc text-base text-mc-diamond w-14">STORAGE</span><span class="font-mc text-base text-mc-white">${fmtBytes(cpu.storage)}B</span></div>
+        <div class="flex items-center gap-2"><span class="font-mc text-base text-mc-lapis w-14">CO-PROCS</span><span class="font-mc text-base text-mc-white">${cpu.coProcessors}</span></div>
       </div>`;
   }
 
@@ -1004,7 +1004,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       setEl('health-val-crafting', `${data.busy}/${data.total} CPUs`);
       setEl('health-val-jobs', `${jobs.length} job${jobs.length !== 1 ? 's' : ''}`);
       const badge = document.getElementById('status-craft-badge');
-      if (badge) { badge.textContent = data.busy > 0 ? 'RUNNING' : 'IDLE'; badge.className = `font-mc text-[10px] ${data.busy > 0 ? 'text-mc-amethyst' : 'text-mc-muted'}`; }
+      if (badge) { badge.textContent = data.busy > 0 ? 'RUNNING' : 'IDLE'; badge.className = `font-mc text-base ${data.busy > 0 ? 'text-mc-amethyst' : 'text-mc-muted'}`; }
     }
     const fill = document.getElementById('progress-cpu') as HTMLElement | null;
     if (fill) fill.style.width = `${data.busy_percent.toFixed(1)}%`;
@@ -1023,7 +1023,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       cell.innerHTML = buildCpuCell(cpu, job);
       cell.className = ['group relative cursor-default pixel-border transition-all duration-300',
         'flex flex-col items-center justify-center gap-1',
-        job ? 'w-32 h-28' : 'w-20 h-20',
+        job ? 'w-36 h-32' : 'w-24 h-24',
         cpu.busy ? 'bg-mc-amethyst/20' : 'bg-mc-stone/40'].join(' ');
       if (wasBusy !== cpu.busy) {
         cell.classList.add(cpu.busy ? 'scale-105' : 'opacity-60');

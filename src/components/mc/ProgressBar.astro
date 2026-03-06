@@ -34,9 +34,9 @@ const style = fillColour[colour] ?? fillColour.emerald;
 <div class="flex flex-col gap-1">
   {label && (
     <div class="flex justify-between items-center">
-      <span class="font-mc text-xs text-mc-muted">{label}</span>
+      <span class="font-mc text-sm text-mc-muted">{label}</span>
       {showPercent && (
-        <span class="font-mc text-xs text-mc-white" id={id ? `${id}-pct` : undefined}>
+        <span class="font-mc text-sm text-mc-white" id={id ? `${id}-pct` : undefined}>
           {pct.toFixed(1)}%
         </span>
       )}

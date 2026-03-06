@@ -32,9 +32,9 @@ const navLinks = [
   <body class="min-h-screen flex flex-col">
     <!-- Top navigation bar -->
     <nav class="mc-panel-raised border-b-2 border-mc-cobble sticky top-0 z-50">
-      <div class="px-4 flex items-center gap-1 h-12">
+      <div class="px-4 flex items-center gap-1 h-14">
         <!-- Logo -->
-        <a href="/" class="font-mc text-mc-diamond text-sm glow-diamond mr-6 shrink-0">
+        <a href="/" class="font-mc text-mc-diamond text-base glow-diamond mr-6 shrink-0">
           ⚡ MC BASE
         </a>
 
@@ -43,7 +43,7 @@ const navLinks = [
           <a
             href={link.href}
             data-section={link.section}
-            class="nav-link font-mc text-xs px-3 py-1.5 transition-colors text-mc-muted hover:text-mc-white hover:bg-mc-stone/40"
+            class="nav-link font-mc text-sm px-3 py-2 transition-colors text-mc-muted hover:text-mc-white hover:bg-mc-stone/40"
           >
             {link.label}
           </a>
@@ -51,8 +51,8 @@ const navLinks = [
 
         <!-- Live indicator -->
         <div class="ml-auto flex items-center gap-2">
-          <span id="live-dot" class="w-2 h-2 rounded-none bg-mc-emerald animate-pulse"></span>
-          <span id="live-label" class="font-mc text-xs text-mc-muted">LIVE</span>
+          <span id="live-dot" class="w-2.5 h-2.5 rounded-none bg-mc-emerald animate-pulse"></span>
+          <span id="live-label" class="font-mc text-sm text-mc-muted">LIVE</span>
         </div>
       </div>
     </nav>
@@ -65,8 +65,8 @@ const navLinks = [
     <!-- Footer -->
     <footer class="border-t-2 border-mc-cobble px-4 py-3">
       <div class="flex items-center justify-between">
-        <span class="font-mc text-xs text-mc-muted">CC:TWEAKED TELEMETRY</span>
-        <span class="font-mc text-xs text-mc-stone" id="last-updated"></span>
+        <span class="font-mc text-sm text-mc-muted">CC:TWEAKED TELEMETRY</span>
+        <span class="font-mc text-sm text-mc-stone" id="last-updated"></span>
       </div>
     </footer>
 
@@ -83,8 +83,8 @@ const navLinks = [
               for (const link of navLinks) {
                 const active = (link as HTMLElement).dataset.section === id;
                 link.className = active
-                  ? 'nav-link font-mc text-xs px-3 py-1.5 transition-colors mc-slot text-mc-white'
-                  : 'nav-link font-mc text-xs px-3 py-1.5 transition-colors text-mc-muted hover:text-mc-white hover:bg-mc-stone/40';
+                  ? 'nav-link font-mc text-sm px-3 py-2 transition-colors mc-slot text-mc-white'
+                  : 'nav-link font-mc text-sm px-3 py-2 transition-colors text-mc-muted hover:text-mc-white hover:bg-mc-stone/40';
               }
             }
           }
