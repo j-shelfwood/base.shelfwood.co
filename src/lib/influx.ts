@@ -1,13 +1,12 @@
 /**
  * Server-only InfluxDB v2 Flux query client.
  * Uses the /api/v2/query endpoint with annotated CSV response format.
- * Never import this in client-side code — env vars with the token are server-only.
+ * Env vars are declared in astro.config.mjs env.schema and imported from
+ * astro:env/server — guaranteed server-only, type-safe, validated at startup.
  */
 
-const INFLUX_URL = import.meta.env.INFLUX_URL || process.env.INFLUX_URL || '';
-const INFLUX_TOKEN = import.meta.env.INFLUX_TOKEN || process.env.INFLUX_TOKEN || '';
-const INFLUX_ORG = import.meta.env.INFLUX_ORG || process.env.INFLUX_ORG || 'shelfwood';
-export const INFLUX_BUCKET = import.meta.env.INFLUX_BUCKET || process.env.INFLUX_BUCKET || 'mc';
+import { INFLUX_URL, INFLUX_TOKEN, INFLUX_ORG, INFLUX_BUCKET as _INFLUX_BUCKET } from 'astro:env/server';
+export const INFLUX_BUCKET = _INFLUX_BUCKET;
 
 export type FluxRow = Record<string, string | number | boolean | null>;
 
