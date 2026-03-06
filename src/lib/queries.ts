@@ -237,20 +237,29 @@ export interface MachineSummary {
 }
 
 export async function machineSummary(): Promise<MachineSummary | null> {
+  // Group by node+field before last() so all collector nodes contribute.
+  // Then sum total/active across nodes and derive percent.
   const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
   |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "machine_summary")
-  |> filter(fn: (r) => r._field == "total_machines" or r._field == "active_machines" or r._field == "active_percent")
+  |> filter(fn: (r) => r._field == "total_machines" or r._field == "active_machines")
+  |> group(columns: ["node", "_field"])
   |> last()
-  |> pivot(rowKey: ["_time", "node"], columnKey: ["_field"], valueColumn: "_value")
+  |> group(columns: ["_field"])
+  |> sum()
 `);
   if (rows.length === 0) return null;
-  const r = rows[0]!;
+  let total = 0;
+  let active = 0;
+  for (const r of rows) {
+    if (r._field === 'total_machines')  total  = (r._value as number) ?? 0;
+    if (r._field === 'active_machines') active = (r._value as number) ?? 0;
+  }
   return {
-    total_machines: (r.total_machines as number) ?? 0,
-    active_machines: (r.active_machines as number) ?? 0,
-    active_percent: (r.active_percent as number) ?? 0,
+    total_machines: total,
+    active_machines: active,
+    active_percent: total > 0 ? (active / total) * 100 : 0,
   };
 }
 
@@ -263,23 +272,31 @@ export interface MachineType {
 }
 
 export async function machineTypes(): Promise<MachineType[]> {
+  // Group by node+type+mod+field so each node's last snapshot is independent,
+  // then pivot and compute active_percent in TS.
   const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
   |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "machine_type")
-  |> filter(fn: (r) => r._field == "total_count" or r._field == "active_count" or r._field == "active_percent")
+  |> filter(fn: (r) => r._field == "total_count" or r._field == "active_count")
   |> filter(fn: (r) => r.type != "me_bridge")
+  |> group(columns: ["node", "mod", "type", "_field"])
   |> last()
+  |> group()
   |> pivot(rowKey: ["_time", "node", "mod", "type"], columnKey: ["_field"], valueColumn: "_value")
 `);
   return rows
-    .map(r => ({
-      type: String(r.type ?? ''),
-      mod: String(r.mod ?? ''),
-      total_count: (r.total_count as number) ?? 0,
-      active_count: (r.active_count as number) ?? 0,
-      active_percent: (r.active_percent as number) ?? 0,
-    }))
+    .map(r => {
+      const total  = (r.total_count  as number) ?? 0;
+      const active = (r.active_count as number) ?? 0;
+      return {
+        type: String(r.type ?? ''),
+        mod: String(r.mod ?? ''),
+        total_count: total,
+        active_count: active,
+        active_percent: total > 0 ? (active / total) * 100 : 0,
+      };
+    })
     .sort((a, b) => b.active_count - a.active_count);
 }
 
@@ -301,7 +318,9 @@ from(bucket: "${INFLUX_BUCKET}")
   |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "machine_activity" and r.mod == "mekanism")
   |> filter(fn: (r) => r.type != "me_bridge")
+  |> group(columns: ["name", "type", "mod", "node", "_field"])
   |> last()
+  |> group()
   |> pivot(rowKey: ["_time", "name", "type", "mod", "node"], columnKey: ["_field"], valueColumn: "_value")
 `);
   return rows
@@ -336,14 +355,18 @@ export async function miMachines(): Promise<MIMachine[]> {
 from(bucket: "${INFLUX_BUCKET}")
   |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "machine_activity" and r.mod == "modern_industrialization")
+  |> group(columns: ["name", "type", "mod", "node", "_field"])
   |> last()
+  |> group()
   |> pivot(rowKey: ["_time", "name", "type", "mod", "node"], columnKey: ["_field"], valueColumn: "_value")
 `),
     queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
   |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "mi_machine_slot_summary")
+  |> group(columns: ["name", "type", "node", "_field"])
   |> last()
+  |> group()
   |> pivot(rowKey: ["_time", "name", "type", "node"], columnKey: ["_field"], valueColumn: "_value")
 `),
   ]);
