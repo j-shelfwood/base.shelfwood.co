@@ -195,23 +195,12 @@ from(bucket: "${INFLUX_BUCKET}")
 from(bucket: "${INFLUX_BUCKET}")
   |> range(start: -24h)
   |> filter(fn: (r) => r._measurement == "ae_cpu")
-  |> group(columns: ["cpu", "cpu_index", "node", "source"])
+  |> filter(fn: (r) => exists r.cpu_index)
+  |> group(columns: ["cpu", "cpu_index", "node", "source", "_field"])
   |> last()
   |> group()
-  |> map(fn: (r) => ({r with cpu_index: if exists r.cpu_index then r.cpu_index else "0"}))
   |> pivot(rowKey: ["_time", "cpu", "cpu_index", "node", "source"], columnKey: ["_field"], valueColumn: "_value")
-`).catch(() =>
-      // Fallback for old data without cpu_index tag
-      queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -24h)
-  |> filter(fn: (r) => r._measurement == "ae_cpu")
-  |> group(columns: ["cpu", "node", "source"])
-  |> last()
-  |> group()
-  |> pivot(rowKey: ["_time", "cpu", "node", "source"], columnKey: ["_field"], valueColumn: "_value")
-`)
-    ),
+`),
   ]);
 
   const s = summaryRows[0];
@@ -222,7 +211,7 @@ from(bucket: "${INFLUX_BUCKET}")
     const cpuName = String(r.cpu ?? 'unnamed');
     const idx = r.cpu_index != null ? String(r.cpu_index) : null;
     // When CPUs are all unnamed, show "CPU N" using the index tag
-    const displayName = (cpuName === 'unnamed' && idx) ? `CPU ${idx}` : cpuName;
+    const displayName = (cpuName.toLowerCase() === 'unnamed' && idx) ? `CPU ${idx}` : cpuName;
     return {
       name: displayName,
       storage: (r.storage as number) ?? 0,
@@ -495,14 +484,17 @@ export interface CraftingJob {
 }
 
 export async function craftingJobs(): Promise<CraftingJob[]> {
-  // ae_crafting_job is only written while a job is actively running.
-  // Keep range tight (-5m) so completed jobs don't appear as "active".
+  // ae_crafting_job is written every AE poll cycle (~60s) while a job is running.
+  // Use a 3-cycle window (3m) as the "active" cutoff. Jobs older than this are
+  // considered complete/stale. The collector node tag lets us detect if the
+  // collector itself went offline vs jobs completing.
   const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -5m)
+  |> range(start: -3m)
   |> filter(fn: (r) => r._measurement == "ae_crafting_job")
   |> last()
   |> pivot(rowKey: ["_time", "item", "cpu", "node"], columnKey: ["_field"], valueColumn: "_value")
+  |> filter(fn: (r) => r.completion < 100)
 `);
   return rows.map(r => ({
     item: String(r.item ?? ''),
