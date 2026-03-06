@@ -503,11 +503,6 @@ export interface CraftingJob {
   cpu: string;
   cpu_index: number;
   quantity: number;
-  crafted: number;
-  completion: number;       // 0-100, may be estimated
-  is_estimated: boolean;    // true = completion derived from item-count delta
-  elapsed_s: number;        // seconds since job was first seen by collector
-  job_start_ms: number;     // epoch ms when job was first seen
 }
 
 export async function craftingJobs(): Promise<CraftingJob[]> {
@@ -522,27 +517,17 @@ from(bucket: "${INFLUX_BUCKET}")
   |> last()
   |> group()
   |> pivot(rowKey: ["_time", "item", "cpu", "cpu_index", "node"], columnKey: ["_field"], valueColumn: "_value")
-  |> filter(fn: (r) => r.completion < 100)
 `);
-
-  const nowMs = Date.now();
 
   return rows.map(r => {
     const cpuName = String(r.cpu ?? 'unnamed');
     const idx = r.cpu_index != null ? Number(r.cpu_index) : 0;
     const displayCpu = cpuName.toLowerCase() === 'unnamed' ? `CPU ${idx}` : cpuName;
-    const jobStartMs = (r.job_start_ms as number) ?? 0;
-    const elapsedS = jobStartMs > 0 ? Math.floor((nowMs - jobStartMs) / 1000) : 0;
     return {
       item: String(r.item ?? ''),
       cpu: displayCpu,
       cpu_index: idx,
       quantity: (r.quantity as number) ?? 0,
-      crafted: (r.crafted as number) ?? 0,
-      completion: (r.completion as number) ?? 0,
-      is_estimated: ((r.is_estimated as number) ?? 0) > 0,
-      elapsed_s: elapsedS,
-      job_start_ms: jobStartMs,
     };
   });
 }

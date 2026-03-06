@@ -12,13 +12,11 @@ const {
 } = Astro.props;
 
 const navLinks = [
-  { href: '/', label: 'Overview' },
-  { href: '/machines', label: 'Machines' },
-  { href: '/storage', label: 'Storage' },
-  { href: '/crafting', label: 'Crafting' },
+  { href: '/#overview',  label: 'Overview',  section: 'overview'  },
+  { href: '/#machines',  label: 'Machines',  section: 'machines'  },
+  { href: '/#storage',   label: 'Storage',   section: 'storage'   },
+  { href: '/#crafting',  label: 'Crafting',  section: 'crafting'  },
 ];
-
-const currentPath = Astro.url.pathname;
 ---
 
 <!doctype html>
@@ -40,16 +38,12 @@ const currentPath = Astro.url.pathname;
           ⚡ MC BASE
         </a>
 
-        <!-- Nav links -->
+        <!-- Nav links — active state driven by IntersectionObserver in scroll-nav script -->
         {navLinks.map(link => (
           <a
             href={link.href}
-            class:list={[
-              'font-mc text-xs px-3 py-1.5 transition-colors',
-              currentPath === link.href
-                ? 'mc-slot text-mc-white'
-                : 'text-mc-muted hover:text-mc-white hover:bg-mc-stone/40',
-            ]}
+            data-section={link.section}
+            class="nav-link font-mc text-xs px-3 py-1.5 transition-colors text-mc-muted hover:text-mc-white hover:bg-mc-stone/40"
           >
             {link.label}
           </a>
@@ -77,14 +71,39 @@ const currentPath = Astro.url.pathname;
     </footer>
 
     <script>
-      // Update last-updated timestamp
-      function updateTimestamp() {
-        const el = document.getElementById('last-updated');
-        if (el) {
-          el.textContent = `UPDATED ${new Date().toLocaleTimeString()}`;
-        }
+      // Highlight nav link matching the section currently in view
+      const sections = document.querySelectorAll('section[id]');
+      const navLinks = document.querySelectorAll('a.nav-link[data-section]');
+
+      if (sections.length > 0) {
+        const observer = new IntersectionObserver(entries => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              const id = entry.target.id;
+              for (const link of navLinks) {
+                const active = (link as HTMLElement).dataset.section === id;
+                link.className = active
+                  ? 'nav-link font-mc text-xs px-3 py-1.5 transition-colors mc-slot text-mc-white'
+                  : 'nav-link font-mc text-xs px-3 py-1.5 transition-colors text-mc-muted hover:text-mc-white hover:bg-mc-stone/40';
+              }
+            }
+          }
+        }, { rootMargin: '-40% 0px -55% 0px' });
+
+        sections.forEach(s => observer.observe(s));
       }
-      updateTimestamp();
+
+      // Smooth scroll for anchor links
+      document.querySelectorAll('a[href^="/#"]').forEach(a => {
+        a.addEventListener('click', e => {
+          const id = (a.getAttribute('href') ?? '').replace('/#', '');
+          const target = document.getElementById(id);
+          if (target) {
+            e.preventDefault();
+            target.scrollIntoView({ behavior: 'smooth' });
+          }
+        });
+      });
     </script>
   </body>
 </html>

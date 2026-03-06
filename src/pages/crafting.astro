@@ -13,6 +13,13 @@ const [jobsRes, cpusRes] = await Promise.allSettled([
 const jobs = jobsRes.status === 'fulfilled' ? jobsRes.value : [];
 const cpus = cpusRes.status === 'fulfilled' ? cpusRes.value : { total: 0, busy: 0, busy_percent: 0, cpus: [] };
 
+// Merge job data into CPUs by cpu_index
+const jobByCpuIndex = new Map(jobs.map(j => [j.cpu_index, j]));
+const enrichedCpus = cpus.cpus.map((cpu, i) => ({
+  ...cpu,
+  job: jobByCpuIndex.get(i + 1) ?? null,
+}));
+
 function itemLabel(name: string): string {
   return name.replace(/^.*:/, '').replace(/_/g, ' ');
 }
@@ -23,11 +30,10 @@ function fmtBytes(b: number): string {
   return String(b);
 }
 
-function fmtElapsed(s: number): string {
-  if (s <= 0) return '';
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
-  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+function fmtQty(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k';
+  return String(n);
 }
 ---
 
@@ -35,140 +41,117 @@ function fmtElapsed(s: number): string {
   <div class="mb-6 flex items-end justify-between">
     <div>
       <h1 class="font-mc text-mc-white text-xl">CRAFTING</h1>
-      <p class="font-mc text-xs text-mc-muted mt-1">ACTIVE JOBS · CPU STATUS</p>
+      <p class="font-mc text-xs text-mc-muted mt-1">CPU STATUS</p>
     </div>
     <span id="last-updated" class="font-mc text-xs text-mc-muted"></span>
   </div>
 
   <!-- Stats row -->
   <div class="grid grid-cols-3 gap-3 mb-6">
-    <StatCard label="CPUs Busy"   value={`${cpus.busy}/${cpus.total}`}   colour="amethyst" id="stat-cpus" />
-    <StatCard label="Active Jobs" value={jobs.length}                     colour="amethyst" id="stat-jobs" />
-    <StatCard label="CPUs Free"   value={cpus.total - cpus.busy}
+    <StatCard label="CPUs Busy"  value={`${cpus.busy}/${cpus.total}`}  colour="amethyst" id="stat-cpus" />
+    <StatCard label="Active Jobs" value={jobs.length}                   colour="amethyst" id="stat-jobs" />
+    <StatCard label="CPUs Free"  value={cpus.total - cpus.busy}
       colour={cpus.total - cpus.busy > 0 ? 'emerald' : 'redstone'} id="stat-free" />
   </div>
 
-  <!-- CPU grid + jobs side by side -->
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-
-    <!-- CPU pixel grid -->
-    <Panel title="CPU GRID" raised>
-      <div id="cpu-grid" class="flex flex-wrap gap-3">
-        {cpus.cpus.length === 0 && (
-          <p class="font-mc text-xs text-mc-muted py-2">No CPU data</p>
-        )}
-        {cpus.cpus.map(cpu => (
-          <div
-            class:list={[
-              'group relative cursor-default pixel-border w-20 h-20',
-              'flex flex-col items-center justify-center gap-1 transition-all duration-300',
-              cpu.busy ? 'bg-mc-amethyst/20' : 'bg-mc-stone/40',
-            ]}
-            data-cpu={cpu.name}
-            data-busy={cpu.busy ? '1' : '0'}
-          >
-            {cpu.busy && (
-              <div class="absolute inset-0 animate-pulse opacity-10 bg-mc-amethyst pointer-events-none" />
-            )}
-            <!-- CPU number -->
-            <span class={`font-mc text-[10px] z-10 ${cpu.busy ? 'text-mc-amethyst' : 'text-mc-muted'}`}>
-              {cpu.name.replace(/[^0-9]/g, '') || cpu.name.slice(-2)}
-            </span>
-            <!-- Status dot -->
-            <span class:list={[
-              'w-2 h-2 z-10',
-              cpu.busy
-                ? 'bg-mc-emerald shadow-[0_0_6px_var(--color-mc-emerald)]'
-                : 'bg-mc-stone',
-            ]} />
-            <!-- Status label -->
+  <!-- Full-width CPU grid -->
+  <Panel title="CPU GRID" raised>
+    <div id="cpu-grid" class="flex flex-wrap gap-3">
+      {enrichedCpus.length === 0 && (
+        <p class="font-mc text-xs text-mc-muted py-2">No CPU data</p>
+      )}
+      {enrichedCpus.map((cpu, i) => (
+        <div
+          class:list={[
+            'group relative cursor-default pixel-border transition-all duration-300',
+            'flex flex-col items-center justify-center gap-1',
+            cpu.job ? 'w-32 h-28' : 'w-20 h-20',
+            cpu.busy ? 'bg-mc-amethyst/20' : 'bg-mc-stone/40',
+          ]}
+          data-cpu={cpu.name}
+          data-cpu-index={i + 1}
+          data-busy={cpu.busy ? '1' : '0'}
+        >
+          {cpu.busy && (
+            <div class="absolute inset-0 animate-pulse opacity-10 bg-mc-amethyst pointer-events-none" />
+          )}
+          <!-- CPU number -->
+          <span class={`font-mc text-[10px] z-10 ${cpu.busy ? 'text-mc-amethyst' : 'text-mc-muted'}`}>
+            {cpu.name.replace(/[^0-9]/g, '') || cpu.name.slice(-2)}
+          </span>
+          <!-- Status dot -->
+          <span class:list={[
+            'w-2 h-2 z-10',
+            cpu.busy ? 'bg-mc-emerald shadow-[0_0_6px_var(--color-mc-emerald)]' : 'bg-mc-stone',
+          ]} />
+          <!-- Status / item label -->
+          {cpu.job ? (
+            <div class="flex flex-col items-center gap-0.5 z-10 px-1 w-full">
+              <span class="font-mc text-[8px] text-mc-emerald">BUSY</span>
+              <span class="font-mc text-[8px] text-mc-white capitalize text-center leading-tight line-clamp-2">
+                {itemLabel(cpu.job.item)}
+              </span>
+              <span class="font-mc text-[9px] text-mc-amethyst">×{fmtQty(cpu.job.quantity)}</span>
+            </div>
+          ) : (
             <span class={`font-mc text-[8px] z-10 ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}`}>
               {cpu.busy ? 'BUSY' : 'FREE'}
             </span>
-            <!-- Co-proc bar at bottom -->
-            <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
-              <div
-                class="h-full bg-mc-lapis transition-all duration-500"
-                style={`width:${Math.min(100, cpu.coProcessors * 10)}%`}
-              />
-            </div>
-            <!-- Tooltip -->
-            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-40 pointer-events-none">
-              <span class="font-mc text-[9px] text-mc-white">{cpu.name}</span>
-              <span class={`font-mc text-[9px] ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}`}>
-                {cpu.busy ? 'BUSY' : 'FREE'}
-              </span>
-              <div class="flex items-center gap-2 mt-0.5">
-                <span class="font-mc text-[8px] text-mc-diamond w-14">STORAGE</span>
-                <span class="font-mc text-[8px] text-mc-white">{fmtBytes(cpu.storage)}B</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="font-mc text-[8px] text-mc-lapis w-14">CO-PROCS</span>
-                <span class="font-mc text-[8px] text-mc-white">{cpu.coProcessors}</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <!-- Utilisation bar below grid -->
-      <div class="mt-4">
-        <ProgressBar
-          value={cpus.busy}
-          max={cpus.total || 1}
-          colour="amethyst"
-          label="CPU Utilisation"
-          showPercent
-          id="progress-cpu"
-        />
-      </div>
-    </Panel>
-
-    <!-- Active jobs -->
-    <div class="flex items-center gap-1 mb-2">
-      <button id="sort-jobs-pct"  class="mc-slot px-3 py-1.5 font-mc text-xs text-mc-amethyst">COMPLETION ▼</button>
-      <button id="sort-jobs-name" class="mc-slot px-3 py-1.5 font-mc text-xs text-mc-muted">ITEM</button>
-    </div>
-    <Panel title="ACTIVE CRAFTING JOBS" raised noPadding>
-      <div id="job-list">
-        {jobs.length === 0 && (
-          <p class="font-mc text-xs text-mc-muted px-4 py-6">No active crafting jobs</p>
-        )}
-        {jobs.map(job => (
-          <div class="px-4 py-3 border-b border-mc-cobble/50 last:border-0">
-            <div class="flex items-center justify-between mb-2">
-              <div class="flex flex-col gap-0.5">
-                <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(job.item)}</span>
-                <span class="font-mc text-xs text-mc-muted">{job.item}</span>
-              </div>
-              <div class="flex flex-col items-end gap-0.5 shrink-0 ml-2">
-                <span class="font-mc text-xs text-mc-amethyst">CPU: {job.cpu}</span>
-                {job.elapsed_s > 0 && (
-                  <span class="font-mc text-[9px] text-mc-muted">{fmtElapsed(job.elapsed_s)}</span>
-                )}
-              </div>
-            </div>
-            <ProgressBar
-              value={job.completion}
-              colour="amethyst"
-              label={`${job.crafted.toLocaleString()} / ${job.quantity.toLocaleString()} crafted${job.is_estimated ? ' (est.)' : ''}`}
-              showPercent
+          )}
+          <!-- Co-proc bar at bottom -->
+          <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
+            <div
+              class="h-full bg-mc-lapis transition-all duration-500"
+              style={`width:${Math.min(100, cpu.coProcessors * 10)}%`}
             />
           </div>
-        ))}
-      </div>
-    </Panel>
+          <!-- Tooltip -->
+          <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-44 pointer-events-none">
+            <span class="font-mc text-[9px] text-mc-white">{cpu.name}</span>
+            <span class={`font-mc text-[9px] ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}`}>
+              {cpu.busy ? 'BUSY' : 'FREE'}
+            </span>
+            {cpu.job && (
+              <>
+                <div class="border-t border-mc-cobble/50 my-0.5" />
+                <span class="font-mc text-[9px] text-mc-white capitalize">{itemLabel(cpu.job.item)}</span>
+                <span class="font-mc text-[8px] text-mc-muted">{cpu.job.item}</span>
+                <span class="font-mc text-[8px] text-mc-amethyst">qty: {cpu.job.quantity.toLocaleString()}</span>
+              </>
+            )}
+            <div class="border-t border-mc-cobble/50 my-0.5" />
+            <div class="flex items-center gap-2">
+              <span class="font-mc text-[8px] text-mc-diamond w-14">STORAGE</span>
+              <span class="font-mc text-[8px] text-mc-white">{fmtBytes(cpu.storage)}B</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="font-mc text-[8px] text-mc-lapis w-14">CO-PROCS</span>
+              <span class="font-mc text-[8px] text-mc-white">{cpu.coProcessors}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
 
-  </div>
+    <!-- Utilisation bar -->
+    <div class="mt-4">
+      <ProgressBar
+        value={cpus.busy}
+        max={cpus.total || 1}
+        colour="amethyst"
+        label="CPU Utilisation"
+        showPercent
+        id="progress-cpu"
+      />
+    </div>
+  </Panel>
 </Layout>
 
 <script>
   const REFRESH_MS = 5_000;
 
-  let jobSortMode: 'completion' | 'name' = 'completion';
-  let jobSortDir: 'desc' | 'asc' = 'desc';
-  type Job = { item: string; cpu: string; cpu_index: number; quantity: number; crafted: number; completion: number; is_estimated: boolean; elapsed_s: number; job_start_ms: number };
-  let lastJobs: Job[] = [];
+  type Job = { item: string; cpu: string; cpu_index: number; quantity: number };
+  type CPU = { name: string; storage: number; coProcessors: number; busy: boolean };
 
   function itemLabel(name: string): string {
     return name.replace(/^.*:/, '').replace(/_/g, ' ');
@@ -180,82 +163,50 @@ function fmtElapsed(s: number): string {
     return String(b);
   }
 
+  function fmtQty(n: number): string {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k';
+    return String(n);
+  }
+
   function setEl(id: string, val: string) {
     const el = document.getElementById(id);
     if (el) el.textContent = val;
   }
 
-  function fmtElapsed(s: number): string {
-    if (s <= 0) return '';
-    if (s < 60) return `${s}s`;
-    if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
-    return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
-  }
-
-  function sortJobs<T extends { item: string; completion: number }>(jobs: T[]): T[] {
-    const copy = [...jobs];
-    if (jobSortMode === 'name') {
-      copy.sort((a, b) => {
-        const cmp = itemLabel(a.item).localeCompare(itemLabel(b.item));
-        return jobSortDir === 'asc' ? cmp : -cmp;
-      });
-    } else {
-      copy.sort((a, b) => jobSortDir === 'desc' ? b.completion - a.completion : a.completion - b.completion);
-    }
-    return copy;
-  }
-
-  function updateJobSortButtons() {
-    const btnPct  = document.getElementById('sort-jobs-pct');
-    const btnName = document.getElementById('sort-jobs-name');
-    if (btnPct) {
-      const arrow = jobSortMode === 'completion' ? (jobSortDir === 'desc' ? ' ▼' : ' ▲') : '';
-      btnPct.textContent = 'COMPLETION' + arrow;
-      btnPct.className = `mc-slot px-3 py-1.5 font-mc text-xs ${jobSortMode === 'completion' ? 'text-mc-amethyst' : 'text-mc-muted'}`;
-    }
-    if (btnName) {
-      const arrow = jobSortMode === 'name' ? (jobSortDir === 'asc' ? ' ▲' : ' ▼') : '';
-      btnName.textContent = 'ITEM' + arrow;
-      btnName.className = `mc-slot px-3 py-1.5 font-mc text-xs ${jobSortMode === 'name' ? 'text-mc-amethyst' : 'text-mc-muted'}`;
-    }
-  }
-
-  document.getElementById('sort-jobs-pct')?.addEventListener('click', () => {
-    if (jobSortMode === 'completion') {
-      jobSortDir = jobSortDir === 'desc' ? 'asc' : 'desc';
-    } else {
-      jobSortMode = 'completion'; jobSortDir = 'desc';
-    }
-    updateJobSortButtons();
-    renderJobs(lastJobs);
-  });
-  document.getElementById('sort-jobs-name')?.addEventListener('click', () => {
-    if (jobSortMode === 'name') {
-      jobSortDir = jobSortDir === 'asc' ? 'desc' : 'asc';
-    } else {
-      jobSortMode = 'name'; jobSortDir = 'asc';
-    }
-    updateJobSortButtons();
-    renderJobs(lastJobs);
-  });
-
-  type CPU = { name: string; storage: number; coProcessors: number; busy: boolean };
-
-  function buildCpuCell(cpu: CPU): string {
+  function buildCpuCell(cpu: CPU, job: Job | null): string {
     const num = cpu.name.replace(/[^0-9]/g, '') || cpu.name.slice(-2);
     const coproPct = Math.min(100, cpu.coProcessors * 10);
+    const hasJob = job !== null;
+    const itemLine = hasJob
+      ? `<div class="flex flex-col items-center gap-0.5 z-10 px-1 w-full">
+           <span class="font-mc text-[8px] text-mc-emerald">BUSY</span>
+           <span class="font-mc text-[8px] text-mc-white capitalize text-center leading-tight" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${itemLabel(job!.item)}</span>
+           <span class="font-mc text-[9px] text-mc-amethyst">×${fmtQty(job!.quantity)}</span>
+         </div>`
+      : `<span class="font-mc text-[8px] z-10 ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}">${cpu.busy ? 'BUSY' : 'FREE'}</span>`;
+
+    const jobTooltip = hasJob
+      ? `<div class="border-t border-mc-cobble/50 my-0.5"></div>
+         <span class="font-mc text-[9px] text-mc-white capitalize">${itemLabel(job!.item)}</span>
+         <span class="font-mc text-[8px] text-mc-muted">${job!.item}</span>
+         <span class="font-mc text-[8px] text-mc-amethyst">qty: ${job!.quantity.toLocaleString()}</span>`
+      : '';
+
     return `
       ${cpu.busy ? `<div class="absolute inset-0 animate-pulse opacity-10 bg-mc-amethyst pointer-events-none"></div>` : ''}
       <span class="font-mc text-[10px] z-10 ${cpu.busy ? 'text-mc-amethyst' : 'text-mc-muted'}">${num}</span>
       <span class="w-2 h-2 z-10 ${cpu.busy ? 'bg-mc-emerald shadow-[0_0_6px_var(--color-mc-emerald)]' : 'bg-mc-stone'}"></span>
-      <span class="font-mc text-[8px] z-10 ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}">${cpu.busy ? 'BUSY' : 'FREE'}</span>
+      ${itemLine}
       <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
         <div class="h-full bg-mc-lapis" style="width:${coproPct}%"></div>
       </div>
-      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-40 pointer-events-none">
+      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-44 pointer-events-none">
         <span class="font-mc text-[9px] text-mc-white">${cpu.name}</span>
         <span class="font-mc text-[9px] ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}">${cpu.busy ? 'BUSY' : 'FREE'}</span>
-        <div class="flex items-center gap-2 mt-0.5">
+        ${jobTooltip}
+        <div class="border-t border-mc-cobble/50 my-0.5"></div>
+        <div class="flex items-center gap-2">
           <span class="font-mc text-[8px] text-mc-diamond w-14">STORAGE</span>
           <span class="font-mc text-[8px] text-mc-white">${fmtBytes(cpu.storage)}B</span>
         </div>
@@ -266,22 +217,27 @@ function fmtElapsed(s: number): string {
       </div>`;
   }
 
-  function renderCPUs(data: { total: number; busy: number; busy_percent: number; cpus: CPU[] }) {
+  function renderCPUs(data: { total: number; busy: number; busy_percent: number; cpus: CPU[] }, jobs: Job[]) {
     setEl('stat-cpus', `${data.busy}/${data.total}`);
+    setEl('stat-jobs', String(jobs.filter(j => j).length));
     setEl('stat-free', String(data.total - data.busy));
 
-    // Progress bar — ProgressBar component uses id="progress-cpu" on fill, id="progress-cpu-pct" on label
     const fill = document.getElementById('progress-cpu') as HTMLElement | null;
     if (fill) fill.style.width = `${data.busy_percent.toFixed(1)}%`;
     const pctSpan = document.getElementById('progress-cpu-pct') as HTMLElement | null;
     if (pctSpan) pctSpan.textContent = `${data.busy_percent.toFixed(1)}%`;
 
-    // CPU grid — patch cells in place
     const grid = document.getElementById('cpu-grid');
     if (!grid) return;
 
-    for (const cpu of data.cpus) {
-      let cell = grid.querySelector(`[data-cpu="${cpu.name}"]`) as HTMLElement | null;
+    const jobByCpuIndex = new Map(jobs.map(j => [j.cpu_index, j]));
+
+    for (let i = 0; i < data.cpus.length; i++) {
+      const cpu = data.cpus[i]!;
+      const job = jobByCpuIndex.get(i + 1) ?? null;
+      const hasJob = job !== null;
+
+      let cell = grid.querySelector(`[data-cpu-index="${i + 1}"]`) as HTMLElement | null;
       const wasBusy = cell?.dataset.busy === '1';
 
       if (!cell) {
@@ -290,15 +246,16 @@ function fmtElapsed(s: number): string {
       }
 
       cell.dataset.cpu = cpu.name;
+      cell.dataset.cpuIndex = String(i + 1);
       cell.dataset.busy = cpu.busy ? '1' : '0';
-      cell.innerHTML = buildCpuCell(cpu);
+      cell.innerHTML = buildCpuCell(cpu, job);
       cell.className = [
-        'group relative cursor-default pixel-border w-20 h-20',
-        'flex flex-col items-center justify-center gap-1 transition-all duration-300',
+        'group relative cursor-default pixel-border transition-all duration-300',
+        'flex flex-col items-center justify-center gap-1',
+        hasJob ? 'w-32 h-28' : 'w-20 h-20',
         cpu.busy ? 'bg-mc-amethyst/20' : 'bg-mc-stone/40',
       ].join(' ');
 
-      // Flash on state change
       if (wasBusy !== cpu.busy) {
         cell.classList.add(cpu.busy ? 'scale-105' : 'opacity-60');
         setTimeout(() => cell!.classList.remove('scale-105', 'opacity-60'), 400);
@@ -306,59 +263,11 @@ function fmtElapsed(s: number): string {
     }
   }
 
-  function renderJobs(jobs: Job[]) {
-    lastJobs = jobs;
-    const list = document.getElementById('job-list');
-    if (!list) return;
-    setEl('stat-jobs', String(jobs.length));
-
-    if (jobs.length === 0) {
-      list.innerHTML = '<p class="font-mc text-xs text-mc-muted px-4 py-6">No active crafting jobs</p>';
-      return;
-    }
-
-    // Recompute elapsed from job_start_ms at render time so it ticks on each 5s refresh
-    const nowMs = Date.now();
-
-    list.innerHTML = sortJobs(jobs).map(job => {
-      const pct = Math.min(100, Math.max(0, job.completion));
-      const elapsedS = job.job_start_ms > 0 ? Math.floor((nowMs - job.job_start_ms) / 1000) : job.elapsed_s;
-      const elapsedStr = fmtElapsed(elapsedS);
-      const craftedLabel = `${job.crafted.toLocaleString()} / ${job.quantity.toLocaleString()} crafted${job.is_estimated ? ' (est.)' : ''}`;
-      const pctLabel = pct > 0 ? `${pct.toFixed(1)}%${job.is_estimated ? '~' : ''}` : '—';
-      return `
-        <div class="px-4 py-3 border-b border-mc-cobble/50 last:border-0">
-          <div class="flex items-center justify-between mb-2">
-            <div class="flex flex-col gap-0.5">
-              <span class="font-mc text-xs text-mc-white capitalize">${itemLabel(job.item)}</span>
-              <span class="font-mc text-xs text-mc-muted">${job.item}</span>
-            </div>
-            <div class="flex flex-col items-end gap-0.5 shrink-0 ml-2">
-              <span class="font-mc text-xs text-mc-amethyst">CPU: ${job.cpu}</span>
-              ${elapsedStr ? `<span class="font-mc text-[9px] text-mc-muted">${elapsedStr}</span>` : ''}
-            </div>
-          </div>
-          <div class="flex flex-col gap-1">
-            <div class="flex justify-between">
-              <span class="font-mc text-xs text-mc-muted">${craftedLabel}</span>
-              <span class="font-mc text-xs ${job.is_estimated ? 'text-mc-muted' : 'text-mc-white'}">${pctLabel}</span>
-            </div>
-            <div class="mc-progress-track">
-              <div class="mc-progress-fill" style="width:${pct}%;background-color:var(--color-mc-amethyst)${job.is_estimated ? ';opacity:0.6' : ''}">
-                <span class="absolute inset-0 top-0 bottom-1/2 bg-white/20"></span>
-              </div>
-            </div>
-          </div>
-        </div>`;
-    }).join('');
-  }
-
   async function refresh() {
     try {
       const data = await fetch('/api/crafting').then(r => r.json());
       if (data.error) return;
-      if (data.jobs !== undefined) renderJobs(data.jobs);
-      if (data.cpus) renderCPUs(data.cpus);
+      if (data.cpus) renderCPUs(data.cpus, data.jobs ?? []);
       const el = document.getElementById('last-updated');
       if (el) el.textContent = `UPDATED ${new Date().toLocaleTimeString()}`;
     } catch (err) {

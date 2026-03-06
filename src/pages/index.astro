@@ -5,45 +5,48 @@ import StatCard from '@/components/mc/StatCard.astro';
 import ProgressBar from '@/components/mc/ProgressBar.astro';
 import LineChart from '@/components/charts/LineChart.astro';
 import DualLineChart from '@/components/charts/DualLineChart.astro';
-import { energySummary, energyFlow, aeSummary, aeCPUs, machineSummary, energyHistory, energyFlowHistory } from '@/lib/queries';
+import {
+  energySummary, energyFlow, energyHistory, energyFlowHistory,
+  aeSummary, aeCPUs, aeItems, aeItemVelocity,
+  machineSummary, machineTypes, mekanismMachines, miMachines as fetchMiMachines,
+  craftingJobs,
+} from '@/lib/queries';
 
-const [energy, flow, ae, cpus, machines, energyHist, flowHist] = await Promise.allSettled([
-  energySummary(),
-  energyFlow(),
-  aeSummary(),
-  aeCPUs(),
-  machineSummary(),
-  energyHistory('-1h'),
-  energyFlowHistory('-1h'),
+const [
+  energyRes, flowRes, eHistRes, fHistRes,
+  aeRes, cpusRes, itemsRes, velocityRes,
+  machSumRes, machTypesRes, mekRes, miRes,
+  jobsRes,
+] = await Promise.allSettled([
+  energySummary(), energyFlow(), energyHistory('-1h'), energyFlowHistory('-1h'),
+  aeSummary(), aeCPUs(), aeItems(), aeItemVelocity('-30m', 15),
+  machineSummary(), machineTypes(), mekanismMachines(), fetchMiMachines(),
+  craftingJobs(),
 ]);
 
-const e = energy.status === 'fulfilled' ? energy.value : null;
-const f = flow.status === 'fulfilled' ? flow.value : [];
-const a = ae.status === 'fulfilled' ? ae.value : null;
-const c = cpus.status === 'fulfilled' ? cpus.value : { total: 0, busy: 0 };
-const m = machines.status === 'fulfilled' ? machines.value : null;
-const eHist = energyHist.status === 'fulfilled' ? energyHist.value : [];
-const fHist = flowHist.status === 'fulfilled' ? flowHist.value : [];
+const e       = energyRes.status    === 'fulfilled' ? energyRes.value    : null;
+const f       = flowRes.status      === 'fulfilled' ? flowRes.value      : [];
+const eHist   = eHistRes.status     === 'fulfilled' ? eHistRes.value     : [];
+const fHist   = fHistRes.status     === 'fulfilled' ? fHistRes.value     : [];
+const a       = aeRes.status        === 'fulfilled' ? aeRes.value        : null;
+const cpus    = cpusRes.status      === 'fulfilled' ? cpusRes.value      : { total: 0, busy: 0, busy_percent: 0, cpus: [] };
+const items   = itemsRes.status     === 'fulfilled' ? itemsRes.value     : [];
+const velocity = velocityRes.status === 'fulfilled' ? velocityRes.value  : [];
+const mSum    = machSumRes.status   === 'fulfilled' ? machSumRes.value   : null;
+const mekMachines = mekRes.status   === 'fulfilled' ? mekRes.value       : [];
+const miMachineList = miRes.status  === 'fulfilled' ? miRes.value        : [];
+const jobs    = jobsRes.status      === 'fulfilled' ? jobsRes.value      : [];
 
-function fmt(n: number | null | undefined, dec = 0): string {
-  if (n == null) return '—';
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
-  return n.toFixed(dec);
-}
-
-// Split flow history by detector name
+// ── Energy helpers ─────────────────────────────────────────────────────────
 const flowNames = [...new Set(fHist.map(r => r.name))];
 const genName = flowNames[0] ?? '';
 const conName = flowNames[1] ?? flowNames[0] ?? '';
 const genHist = fHist.filter(r => r.name === genName);
 const conHist = fHist.filter(r => r.name === conName);
-
 const genRate = f.find(r => r.name === genName)?.rate_fe_t ?? 0;
 const conRate = f.find(r => r.name === conName)?.rate_fe_t ?? 0;
 const netFlow = genRate - conRate;
 
-// Energy ETA: ticks → seconds (20 ticks/s)
 function energyEta(stored: number, capacity: number, netFePt: number): string {
   if (Math.abs(netFePt) < 1) return 'STABLE';
   const fe = netFePt > 0 ? (capacity - stored) : stored;
@@ -55,336 +58,846 @@ function energyEta(stored: number, capacity: number, netFePt: number): string {
 }
 const etaLabel = e ? (netFlow > 0 ? 'Full in' : 'Empty in') : '—';
 const etaValue = e ? energyEta(e.stored_fe, e.capacity_fe, netFlow) : '—';
+
+// ── Machines helpers ────────────────────────────────────────────────────────
+const mekByType = mekMachines.reduce<Record<string, typeof mekMachines>>((acc, m) => {
+  (acc[m.type] ??= []).push(m); return acc;
+}, {});
+const miByType = miMachineList.reduce<Record<string, typeof miMachineList>>((acc, m) => {
+  (acc[m.type] ??= []).push(m); return acc;
+}, {});
+
+const typeColour: Record<string, string> = {
+  enrichment_chamber: 'copper', crusher: 'copper', purification_chamber: 'copper',
+  energized_smelter: 'gold', osmium_compressor: 'gold', combiner: 'gold',
+  metallurgic_infuser: 'amethyst', chemical_infuser: 'amethyst', chemical_injection_chamber: 'amethyst',
+  electrolytic_separator: 'diamond', solar_neutron_activator: 'diamond', isotopic_centrifuge: 'diamond',
+  precision_sawmill: 'emerald',
+};
+const miTypeColour: Record<string, string> = {
+  assembler: 'amethyst', macerator: 'copper', compressor: 'gold', mixer: 'diamond',
+  furnace: 'gold', electrolyzer: 'diamond', centrifuge: 'emerald',
+  cutting_machine: 'copper', packer: 'white', unpacker: 'white',
+};
+
+function colourFor(type: string) { return typeColour[type] ?? 'white'; }
+function miColourFor(label: string) { return miTypeColour[label.replace(/ /g, '_')] ?? 'white'; }
+function formatMachineType(type: string): string {
+  return type.replace(/^basic/, 'B.').replace(/^advanced/, 'A.').replace(/^elite/, 'E.')
+    .replace(/^ultimate/, 'U.').replace(/Factory$/, 'Fac')
+    .replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ');
+}
+
+// ── Storage helpers ─────────────────────────────────────────────────────────
+function fmt(n: number | null | undefined, dec = 0): string {
+  if (n == null) return '—';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return n.toFixed(dec);
+}
+function fmtQty(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k';
+  return String(n);
+}
+function itemLabel(name: string): string {
+  return name.replace(/^.*:/, '').replace(/_/g, ' ');
+}
+function fmtBytes(b: number): string {
+  if (b >= 1_000_000) return (b / 1_000_000).toFixed(1) + 'M';
+  if (b >= 1_000) return (b / 1_000).toFixed(0) + 'K';
+  return String(b);
+}
+
+// ── Crafting helpers ────────────────────────────────────────────────────────
+const jobByCpuIndex = new Map(jobs.map(j => [j.cpu_index, j]));
+const enrichedCpus = cpus.cpus.map((cpu, i) => ({
+  ...cpu,
+  job: jobByCpuIndex.get(i + 1) ?? null,
+}));
+
+// ── Health score ───────────────────────────────────────────────────────────
+const energyPct  = e?.percent ?? 0;
+const machinePct = mSum?.active_percent ?? 0;
+const storageFree = a ? (1 - a.item_storage_used / (a.item_storage_total || 1)) * 100 : 100;
+const healthScore = Math.round(energyPct * 0.5 + machinePct * 0.3 + storageFree * 0.2);
+const healthStatus = healthScore >= 80 ? 'NOMINAL' : healthScore >= 60 ? 'DEGRADED' : healthScore >= 40 ? 'WARNING' : 'CRITICAL';
 ---
 
-<Layout title="MC Base — Overview">
-  <!-- Page header -->
-  <div class="mb-6 flex items-end justify-between">
-    <div>
-      <h1 class="font-mc text-mc-white text-xl glow-diamond">OVERVIEW</h1>
-      <p class="font-mc text-xs text-mc-muted mt-1">ENERGY · STORAGE · MACHINES</p>
-    </div>
-  </div>
+<Layout title="MC Base">
 
-  <!-- ── Row 1: Headline stats ─────────────────────────────────────────────── -->
-  <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
-    <StatCard
-      label="Energy Stored"
-      value={fmt(e?.stored_fe)}
-      suffix=" FE"
-      colour="gold"
-      id="stat-stored-fe"
-    />
-    <StatCard
-      label="Energy %"
-      value={e ? e.percent.toFixed(1) : '—'}
-      suffix="%"
-      colour="gold"
-      id="stat-energy-pct"
-    />
-    <StatCard
-      label="Generation"
-      value={fmt(genRate)}
-      suffix=" FE/t"
-      colour="emerald"
-      id="stat-gen"
-    />
-    <StatCard
-      label="Consumption"
-      value={fmt(conRate)}
-      suffix=" FE/t"
-      colour="redstone"
-      id="stat-con"
-    />
-    <StatCard
-      label="Net Flow"
-      value={fmt(netFlow)}
-      suffix=" FE/t"
-      colour={netFlow >= 0 ? 'emerald' : 'redstone'}
-      id="stat-net"
-    />
-    <StatCard
-      label={etaLabel}
-      value={etaValue}
-      colour={netFlow >= 0 ? 'emerald' : 'redstone'}
-      id="stat-eta"
-    />
-    <StatCard
-      label="AE Items"
-      value={fmt(a?.items_total)}
-      colour="diamond"
-      id="stat-items"
-    />
-  </div>
-
-  <!-- ── Row 2: AE + Machine stats ─────────────────────────────────────────── -->
-  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-    <StatCard
-      label="AE Unique Items"
-      value={fmt(a?.items_unique)}
-      colour="diamond"
-      id="stat-items-unique"
-    />
-    <StatCard
-      label="AE Energy"
-      value={fmt(a?.energy_usage)}
-      suffix=" FE/t"
-      colour="diamond"
-      id="stat-ae-energy"
-    />
-    <StatCard
-      label="Storage Used"
-      value={a ? ((a.item_storage_used / (a.item_storage_total || 1)) * 100).toFixed(1) : '—'}
-      suffix="%"
-      colour="lapis"
-      id="stat-storage-pct"
-    />
-    <StatCard
-      label="CPUs Busy"
-      value={c ? `${c.busy}/${c.total}` : '—'}
-      colour="amethyst"
-      id="stat-cpus"
-    />
-    <StatCard
-      label="Machines Active"
-      value={fmt(m?.active_machines)}
-      colour="copper"
-      id="stat-machines-active"
-    />
-    <StatCard
-      label="Machines Total"
-      value={fmt(m?.total_machines)}
-      colour="white"
-      id="stat-machines-total"
-    />
-  </div>
-
-  <!-- ── Row 2.5: Base health score ───────────────────────────────────────────── -->
-  <div class="mb-6">
-    <div class="mc-panel-raised flex items-center gap-6 px-6 py-4">
-      <!-- Score -->
-      <div class="flex flex-col items-center shrink-0 w-24">
-        <span class="font-mc text-xs text-mc-muted mb-1">BASE HEALTH</span>
-        <span id="health-score" class="font-mc text-5xl leading-none glow-emerald text-mc-emerald">
-          {(() => {
-            const energyPct  = e?.percent ?? 0;
-            const machinePct = m ? m.active_percent : 0;
-            const storagePct = a ? (1 - (a.item_storage_used / (a.item_storage_total || 1))) * 100 : 100;
-            return Math.round(energyPct * 0.5 + machinePct * 0.3 + storagePct * 0.2);
-          })()}
-        </span>
-        <span class="font-mc text-xs text-mc-muted mt-1">/ 100</span>
-      </div>
-
-      <!-- Divider -->
-      <div class="w-px self-stretch bg-mc-cobble/50" />
-
-      <!-- Component bars -->
-      <div class="flex-1 flex flex-col gap-3">
-        <div class="flex items-center gap-3">
-          <span class="font-mc text-xs text-mc-gold w-24 shrink-0">ENERGY</span>
-          <div class="flex-1 mc-progress-track">
-            <div id="health-bar-energy" class="mc-progress-fill bg-mc-gold" style={`width:${e?.percent ?? 0}%`} />
-          </div>
-          <span id="health-val-energy" class="font-mc text-xs text-mc-gold w-10 text-right">
-            {(e?.percent ?? 0).toFixed(0)}%
-          </span>
-        </div>
-        <div class="flex items-center gap-3">
-          <span class="font-mc text-xs text-mc-copper w-24 shrink-0">MACHINES</span>
-          <div class="flex-1 mc-progress-track">
-            <div id="health-bar-machines" class="mc-progress-fill bg-mc-copper" style={`width:${m?.active_percent ?? 0}%`} />
-          </div>
-          <span id="health-val-machines" class="font-mc text-xs text-mc-copper w-10 text-right">
-            {(m?.active_percent ?? 0).toFixed(0)}%
-          </span>
-        </div>
-        <div class="flex items-center gap-3">
-          <span class="font-mc text-xs text-mc-diamond w-24 shrink-0">STORAGE</span>
-          <div class="flex-1 mc-progress-track">
-            <div id="health-bar-storage" class="mc-progress-fill bg-mc-diamond"
-              style={`width:${a ? (1 - a.item_storage_used / (a.item_storage_total || 1)) * 100 : 100}%`} />
-          </div>
-          <span id="health-val-storage" class="font-mc text-xs text-mc-diamond w-10 text-right">
-            {a ? ((1 - a.item_storage_used / (a.item_storage_total || 1)) * 100).toFixed(0) : 100}%
-          </span>
-        </div>
-      </div>
-
-      <!-- Divider -->
-      <div class="w-px self-stretch bg-mc-cobble/50 hidden sm:block" />
-
-      <!-- Status label -->
-      <div class="hidden sm:flex flex-col items-center shrink-0 w-20">
-        <span id="health-status" class="font-mc text-xs text-center glow-emerald text-mc-emerald">
-          {(() => {
-            const score = Math.round((e?.percent ?? 0) * 0.5 + (m?.active_percent ?? 0) * 0.3 + (a ? (1 - a.item_storage_used / (a.item_storage_total || 1)) * 100 : 100) * 0.2);
-            if (score >= 80) return 'NOMINAL';
-            if (score >= 60) return 'DEGRADED';
-            if (score >= 40) return 'WARNING';
-            return 'CRITICAL';
-          })()}
-        </span>
+  <!-- ═══════════════════════════════════════════════════════════ OVERVIEW ══ -->
+  <section id="overview" class="mb-16 scroll-mt-16">
+    <div class="mb-6 flex items-end justify-between">
+      <div>
+        <h1 class="font-mc text-mc-white text-xl glow-diamond">OVERVIEW</h1>
+        <p class="font-mc text-xs text-mc-muted mt-1">ENERGY · STORAGE · MACHINES</p>
       </div>
     </div>
-  </div>
 
-  <!-- ── Row 3: Energy graphs ───────────────────────────────────────────────── -->
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
-    <Panel title="GENERATION VS CONSUMPTION" class="lg:col-span-2" raised>
-      <DualLineChart
-        dataA={genHist}
-        dataB={conHist}
-        colourA="var(--color-mc-emerald)"
-        colourB="var(--color-mc-redstone)"
-        labelA="Generation"
-        labelB="Consumption"
-        height={100}
-        suffix=" FE/t"
-        id="chart-gen-con"
-      />
-    </Panel>
+    <!-- Headline stats -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+      <StatCard label="Energy Stored" value={fmt(e?.stored_fe)} suffix=" FE" colour="gold" id="stat-stored-fe" />
+      <StatCard label="Energy %" value={e ? e.percent.toFixed(1) : '—'} suffix="%" colour="gold" id="stat-energy-pct" />
+      <StatCard label="Generation" value={fmt(genRate)} suffix=" FE/t" colour="emerald" id="stat-gen" />
+      <StatCard label="Consumption" value={fmt(conRate)} suffix=" FE/t" colour="redstone" id="stat-con" />
+      <StatCard label="Net Flow" value={fmt(netFlow)} suffix=" FE/t" colour={netFlow >= 0 ? 'emerald' : 'redstone'} id="stat-net" />
+      <StatCard label={etaLabel} value={etaValue} colour={netFlow >= 0 ? 'emerald' : 'redstone'} id="stat-eta" />
+      <StatCard label="AE Items" value={fmt(a?.items_total)} colour="diamond" id="stat-items" />
+    </div>
 
-    <Panel title="ENERGY STORAGE %" raised>
-      <ProgressBar value={e?.percent ?? 0} colour="gold" showPercent label="Charge" id="progress-energy" />
-      <div class="mt-3">
-        <LineChart data={eHist} colour="var(--color-mc-gold)" height={80} suffix="%" id="chart-energy-pct" />
-      </div>
-    </Panel>
-  </div>
+    <!-- Secondary stats -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      <StatCard label="AE Unique Items" value={fmt(a?.items_unique)} colour="diamond" id="stat-items-unique" />
+      <StatCard label="AE Energy" value={fmt(a?.energy_usage)} suffix=" FE/t" colour="diamond" id="stat-ae-energy" />
+      <StatCard label="Storage Used" value={a ? ((a.item_storage_used / (a.item_storage_total || 1)) * 100).toFixed(1) : '—'} suffix="%" colour="lapis" id="stat-storage-pct" />
+      <StatCard label="CPUs Busy" value={cpus ? `${cpus.busy}/${cpus.total}` : '—'} colour="amethyst" id="stat-cpus" />
+      <StatCard label="Machines Active" value={fmt(mSum?.active_machines)} colour="copper" id="stat-machines-active" />
+      <StatCard label="Machines Total" value={fmt(mSum?.total_machines)} colour="white" id="stat-machines-total" />
+    </div>
 
-  <!-- ── Row 4: Storage breakdown ──────────────────────────────────────────── -->
-  {a && (
-    <Panel title="AE2 STORAGE" raised>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <ProgressBar
-          value={a.item_storage_used}
-          max={a.item_storage_total || 1}
-          colour="diamond"
-          label="Item Storage"
-          showPercent
-          id="progress-item-storage"
-        />
-        <div class="flex flex-col gap-1">
-          <span class="font-mc text-xs text-mc-muted">ITEMS TRACKED</span>
-          <span class="font-mc text-sm text-mc-diamond">{a.items_unique.toLocaleString()} unique / {a.items_total.toLocaleString()} total</span>
+    <!-- Base health -->
+    <div class="mb-6">
+      <div class="mc-panel-raised flex items-center gap-6 px-6 py-4">
+        <div class="flex flex-col items-center shrink-0 w-24">
+          <span class="font-mc text-xs text-mc-muted mb-1">BASE HEALTH</span>
+          <span id="health-score" class={`font-mc text-5xl leading-none ${healthScore >= 80 ? 'glow-emerald text-mc-emerald' : healthScore >= 60 ? 'text-mc-gold' : 'text-mc-redstone'}`}>
+            {healthScore}
+          </span>
+          <span class="font-mc text-xs text-mc-muted mt-1">/ 100</span>
+        </div>
+        <div class="w-px self-stretch bg-mc-cobble/50" />
+        <div class="flex-1 flex flex-col gap-3">
+          {[
+            ['ENERGY',   'gold',    'health-bar-energy',   energyPct,   'health-val-energy'],
+            ['MACHINES', 'copper',  'health-bar-machines', machinePct,  'health-val-machines'],
+            ['STORAGE',  'diamond', 'health-bar-storage',  storageFree, 'health-val-storage'],
+          ].map(([label, col, barId, pct, valId]) => (
+            <div class="flex items-center gap-3">
+              <span class={`font-mc text-xs text-mc-${col} w-24 shrink-0`}>{label as string}</span>
+              <div class="flex-1 mc-progress-track">
+                <div id={barId as string} class={`mc-progress-fill bg-mc-${col}`} style={`width:${pct as number}%`} />
+              </div>
+              <span id={valId as string} class={`font-mc text-xs text-mc-${col} w-10 text-right`}>
+                {(pct as number).toFixed(0)}%
+              </span>
+            </div>
+          ))}
+        </div>
+        <div class="w-px self-stretch bg-mc-cobble/50 hidden sm:block" />
+        <div class="hidden sm:flex flex-col items-center shrink-0 w-20">
+          <span id="health-status" class={`font-mc text-xs text-center ${healthScore >= 80 ? 'glow-emerald text-mc-emerald' : healthScore >= 60 ? 'text-mc-gold' : 'text-mc-redstone'}`}>
+            {healthStatus}
+          </span>
         </div>
       </div>
+    </div>
+
+    <!-- Energy charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
+      <Panel title="GENERATION VS CONSUMPTION" class="lg:col-span-2" raised>
+        <DualLineChart dataA={genHist} dataB={conHist}
+          colourA="var(--color-mc-emerald)" colourB="var(--color-mc-redstone)"
+          labelA="Generation" labelB="Consumption"
+          height={100} suffix=" FE/t" id="chart-gen-con" />
+      </Panel>
+      <Panel title="ENERGY STORAGE %" raised>
+        <ProgressBar value={e?.percent ?? 0} colour="gold" showPercent label="Charge" id="progress-energy" />
+        <div class="mt-3">
+          <LineChart data={eHist} colour="var(--color-mc-gold)" height={80} suffix="%" id="chart-energy-pct" />
+        </div>
+      </Panel>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════════ MACHINES ══ -->
+  <section id="machines" class="mb-16 scroll-mt-16">
+    <div class="mb-6 flex items-end justify-between">
+      <div>
+        <h1 class="font-mc text-mc-white text-xl">MACHINES</h1>
+        <p class="font-mc text-xs text-mc-muted mt-1">MEKANISM · MODERN INDUSTRIALIZATION</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3 mb-6">
+      <StatCard label="Active"   value={mSum?.active_machines ?? '—'} colour="emerald" id="stat-mach-active" />
+      <StatCard label="Total"    value={mSum?.total_machines  ?? '—'} colour="white"   id="stat-mach-total" />
+      <StatCard label="Active %" value={mSum ? mSum.active_percent.toFixed(1) + '%' : '—'}
+        colour={mSum && mSum.active_percent > 50 ? 'emerald' : 'copper'} id="stat-mach-pct" />
+    </div>
+
+    <Panel title="MEKANISM MACHINES" raised noPadding class="mb-6">
+      <div id="mek-grid" class="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 items-start">
+        {Object.keys(mekByType).length === 0 && <p class="font-mc text-xs text-mc-muted py-2">No Mekanism machine data</p>}
+        {Object.entries(mekByType).map(([type, machines]) => {
+          const active = machines.filter(m => m.active).length;
+          const col = colourFor(type);
+          return (
+            <div data-type-group={type}>
+              <div class="flex items-center gap-3 mb-2">
+                <span class={`font-mc text-xs text-mc-${col} uppercase tracking-widest`}>{formatMachineType(type)}</span>
+                <span class="font-mc text-xs text-mc-muted">
+                  <span class="text-mc-emerald" data-active-count={type}>{active}</span>/{machines.length}
+                </span>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                {machines.map(m => (
+                  <div class:list={['machine-cell group relative cursor-default transition-all duration-300',
+                    'pixel-border w-14 h-14 flex flex-col items-center justify-center gap-0.5',
+                    m.active ? `bg-mc-${col}/20` : 'bg-mc-stone/40']}
+                    data-machine={m.name} data-type={type}
+                    data-active={m.active ? '1' : '0'} data-energy={m.energy_percent.toFixed(0)} data-progress={m.progress_percent.toFixed(0)}>
+                    {m.active && <div class={`absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none`} />}
+                    <span class={`font-mc text-[8px] leading-none z-10 px-0.5 text-center truncate w-full ${m.active ? `text-mc-${col}` : 'text-mc-muted'}`}>
+                      {m.name.replace(/_/g, ' ').replace(/mekanism /i, '').slice(0, 10)}
+                    </span>
+                    <span class:list={['w-1.5 h-1.5 z-10', m.active ? 'bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]' : 'bg-mc-stone']} />
+                    <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
+                      <div class="h-full bg-mc-gold transition-all duration-500" style={`width:${Math.min(100, m.energy_percent)}%`} />
+                    </div>
+                    <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
+                      <span class="font-mc text-[9px] text-mc-white capitalize">{m.name.replace(/_/g, ' ')}</span>
+                      <span class={`font-mc text-[9px] ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}`}>{m.active ? 'ACTIVE' : 'IDLE'}</span>
+                      <div class="flex items-center gap-1 mt-0.5">
+                        <span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span>
+                        <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style={`width:${Math.min(100, m.energy_percent)}%`} /></div>
+                        <span class="font-mc text-[8px] text-mc-gold">{m.energy_percent.toFixed(0)}%</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </Panel>
-  )}
+
+    <Panel title="MODERN INDUSTRIALIZATION" raised noPadding>
+      <div id="mi-grid" class="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 items-start">
+        {Object.keys(miByType).length === 0 && <p class="font-mc text-xs text-mc-muted py-2">No MI machine data</p>}
+        {Object.entries(miByType).map(([type, machines]) => {
+          const active = machines.filter(m => m.active).length;
+          const col = miColourFor(type.replace('modern_industrialization:', '').replace(/_/g, ' '));
+          return (
+            <div data-type-group={type}>
+              <div class="flex items-center gap-3 mb-2">
+                <span class={`font-mc text-xs text-mc-${col} uppercase tracking-widest`}>
+                  {type.replace('modern_industrialization:', '').replace(/_/g, ' ')}
+                </span>
+                <span class="font-mc text-xs text-mc-muted">
+                  <span class="text-mc-emerald" data-active-count={type}>{active}</span>/{machines.length}
+                </span>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                {machines.map(m => {
+                  const isSteam = m.type.includes('steel_');
+                  const slotPct = m.total_slots ? (m.occupied_slots ?? 0) / m.total_slots * 100 : 0;
+                  const barPct = isSteam ? slotPct : m.energy_percent;
+                  const barColour = isSteam ? 'var(--color-mc-diamond)' : 'var(--color-mc-gold)';
+                  return (
+                    <div class:list={['machine-cell group relative cursor-default transition-all duration-300',
+                      'pixel-border w-14 h-14 flex flex-col items-center justify-center gap-0.5',
+                      m.active ? `bg-mc-${col}/20` : 'bg-mc-stone/40']}
+                      data-machine={m.name} data-type={type}
+                      data-active={m.active ? '1' : '0'} data-energy={m.energy_percent.toFixed(0)}
+                      data-occupied={m.occupied_slots ?? 0} data-total-slots={m.total_slots ?? 0}>
+                      {m.active && <div class={`absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none`} />}
+                      <span class={`font-mc text-[8px] leading-none z-10 px-0.5 text-center truncate w-full ${m.active ? `text-mc-${col}` : 'text-mc-muted'}`}>
+                        {m.name.replace(/_/g, ' ').replace(/modern industrialization /i, '').slice(0, 10)}
+                      </span>
+                      <span class:list={['w-1.5 h-1.5 z-10', m.active ? 'bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]' : 'bg-mc-stone']} />
+                      <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
+                        <div class="h-full transition-all duration-500" style={`width:${Math.min(100, barPct)}%;background-color:${barColour}`} />
+                      </div>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
+                        <span class="font-mc text-[9px] text-mc-white capitalize">{m.name.replace(/_/g, ' ')}</span>
+                        <span class={`font-mc text-[9px] ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}`}>{m.active ? 'ACTIVE' : 'IDLE'}</span>
+                        {!isSteam && (
+                          <div class="flex items-center gap-1 mt-0.5">
+                            <span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span>
+                            <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style={`width:${Math.min(100, m.energy_percent)}%`} /></div>
+                            <span class="font-mc text-[8px] text-mc-gold">{m.energy_percent.toFixed(0)}%</span>
+                          </div>
+                        )}
+                        {m.occupied_slots != null && m.total_slots != null && (
+                          <div class="flex items-center gap-1">
+                            <span class="font-mc text-[8px] text-mc-diamond w-10">SLOTS</span>
+                            <span class="font-mc text-[8px] text-mc-diamond">{m.occupied_slots}/{m.total_slots}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
+  </section>
+
+  <!-- ═════════════════════════════════════════════════════════════ STORAGE ══ -->
+  <section id="storage" class="mb-16 scroll-mt-16">
+    <div class="mb-6 flex items-end justify-between gap-4 flex-wrap">
+      <div>
+        <h1 class="font-mc text-mc-white text-xl">STORAGE</h1>
+        <p class="font-mc text-xs text-mc-muted mt-1">AE2 ITEM BROWSER</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-1">
+          <button id="sort-count" class="mc-slot px-3 py-1.5 font-mc text-xs text-mc-diamond">COUNT ▼</button>
+          <button id="sort-name"  class="mc-slot px-3 py-1.5 font-mc text-xs text-mc-muted">NAME</button>
+        </div>
+        <div class="mc-slot px-3 py-2 flex items-center gap-2">
+          <span class="font-mc text-xs text-mc-muted">SEARCH:</span>
+          <input id="item-search" type="text" placeholder="iron ingot..."
+            class="bg-transparent font-mc text-xs text-mc-white outline-none placeholder:text-mc-stone w-40"
+            autocomplete="off" />
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <StatCard label="Total Items"  value={a ? fmt(a.items_total)  : '—'} colour="diamond" id="stat-total-items" />
+      <StatCard label="Unique Types" value={a?.items_unique ?? '—'}         colour="diamond" id="stat-unique" />
+      <StatCard label="Item Storage" value={a ? ((a.item_storage_used / (a.item_storage_total || 1)) * 100).toFixed(1) + '%' : '—'} colour="lapis" id="stat-storage-bar-pct" />
+      <StatCard label="Fluids"       value={a ? fmt(a.fluids_total) + ' mB' : '—'}           colour="diamond" id="stat-fluids" />
+    </div>
+
+    {a && (
+      <div class="mb-6 flex flex-col gap-3">
+        <ProgressBar value={a.item_storage_used} max={a.item_storage_total || 1}
+          colour="diamond" label="Item Cell Capacity" showPercent id="progress-storage" />
+        {a.fluid_storage_total > 0 && (
+          <ProgressBar value={a.fluid_storage_used} max={a.fluid_storage_total}
+            colour="lapis" label="Fluid Cell Capacity" showPercent id="progress-fluid-storage" />
+        )}
+        {a.chemical_storage_total > 0 && (
+          <ProgressBar value={a.chemical_storage_used} max={a.chemical_storage_total}
+            colour="amethyst" label="Chemical Cell Capacity" showPercent id="progress-chem-storage" />
+        )}
+      </div>
+    )}
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+      <div data-panel="producers">
+        <Panel title="TOP PRODUCERS · 30m" raised noPadding>
+          <div class="divide-y divide-mc-cobble/50">
+            {(() => {
+              const producers = velocity.filter(v => v.delta > 0);
+              const max = producers[0]?.delta ?? 1;
+              return producers.length > 0
+                ? producers.slice(0, 8).map(v => {
+                    const pct = Math.min(100, (v.delta / max) * 100);
+                    return (
+                      <div class="px-4 py-2 flex flex-col gap-1">
+                        <div class="flex items-center justify-between">
+                          <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(v.item)}</span>
+                          <span class="font-mc text-xs text-mc-emerald">+{fmt(v.delta)}</span>
+                        </div>
+                        <div class="mc-progress-track">
+                          <div class="mc-progress-fill" style={`width:${pct}%;background-color:var(--color-mc-emerald);opacity:0.6`} />
+                        </div>
+                      </div>
+                    );
+                  })
+                : <p class="font-mc text-xs text-mc-muted px-4 py-4">No production detected</p>;
+            })()}
+          </div>
+        </Panel>
+      </div>
+      <div data-panel="consumers">
+        <Panel title="TOP CONSUMERS · 30m" raised noPadding>
+          <div class="divide-y divide-mc-cobble/50">
+            {(() => {
+              const consumers = velocity.filter(v => v.delta < 0);
+              const max = Math.abs(consumers[0]?.delta ?? 1);
+              return consumers.length > 0
+                ? consumers.slice(0, 8).map(v => {
+                    const pct = Math.min(100, (Math.abs(v.delta) / max) * 100);
+                    return (
+                      <div class="px-4 py-2 flex flex-col gap-1">
+                        <div class="flex items-center justify-between">
+                          <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(v.item)}</span>
+                          <span class="font-mc text-xs text-mc-redstone">{fmt(v.delta)}</span>
+                        </div>
+                        <div class="mc-progress-track">
+                          <div class="mc-progress-fill" style={`width:${pct}%;background-color:var(--color-mc-redstone);opacity:0.6`} />
+                        </div>
+                      </div>
+                    );
+                  })
+                : <p class="font-mc text-xs text-mc-muted px-4 py-4">No consumption detected</p>;
+            })()}
+          </div>
+        </Panel>
+      </div>
+    </div>
+
+    <Panel title="ITEMS" raised noPadding>
+      <div id="item-list" class="divide-y divide-mc-cobble/50">
+        {items.map(item => (
+          <div class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors cursor-pointer item-row" data-item={item.item}>
+            <div class="flex flex-col gap-0.5">
+              <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(item.item)}</span>
+              <span class="font-mc text-xs text-mc-muted">{item.item}</span>
+            </div>
+            <span class="font-mc text-sm text-mc-diamond shrink-0">{fmt(item.count)}</span>
+          </div>
+        ))}
+        {items.length === 0 && <p class="font-mc text-xs text-mc-muted px-4 py-6">No items found</p>}
+      </div>
+    </Panel>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════════ CRAFTING ══ -->
+  <section id="crafting" class="mb-16 scroll-mt-16">
+    <div class="mb-6 flex items-end justify-between">
+      <div>
+        <h1 class="font-mc text-mc-white text-xl">CRAFTING</h1>
+        <p class="font-mc text-xs text-mc-muted mt-1">CPU STATUS</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3 mb-6">
+      <StatCard label="CPUs Busy"   value={`${cpus.busy}/${cpus.total}`} colour="amethyst" id="stat-craft-cpus" />
+      <StatCard label="Active Jobs" value={jobs.length}                   colour="amethyst" id="stat-craft-jobs" />
+      <StatCard label="CPUs Free"   value={cpus.total - cpus.busy}
+        colour={cpus.total - cpus.busy > 0 ? 'emerald' : 'redstone'} id="stat-craft-free" />
+    </div>
+
+    <Panel title="CPU GRID" raised>
+      <div id="cpu-grid" class="flex flex-wrap gap-3">
+        {enrichedCpus.length === 0 && <p class="font-mc text-xs text-mc-muted py-2">No CPU data</p>}
+        {enrichedCpus.map((cpu, i) => (
+          <div class:list={['group relative cursor-default pixel-border transition-all duration-300',
+            'flex flex-col items-center justify-center gap-1',
+            cpu.job ? 'w-32 h-28' : 'w-20 h-20',
+            cpu.busy ? 'bg-mc-amethyst/20' : 'bg-mc-stone/40']}
+            data-cpu={cpu.name} data-cpu-index={i + 1} data-busy={cpu.busy ? '1' : '0'}>
+            {cpu.busy && <div class="absolute inset-0 animate-pulse opacity-10 bg-mc-amethyst pointer-events-none" />}
+            <span class={`font-mc text-[10px] z-10 ${cpu.busy ? 'text-mc-amethyst' : 'text-mc-muted'}`}>
+              {cpu.name.replace(/[^0-9]/g, '') || cpu.name.slice(-2)}
+            </span>
+            <span class:list={['w-2 h-2 z-10', cpu.busy ? 'bg-mc-emerald shadow-[0_0_6px_var(--color-mc-emerald)]' : 'bg-mc-stone']} />
+            {cpu.job ? (
+              <div class="flex flex-col items-center gap-0.5 z-10 px-1 w-full">
+                <span class="font-mc text-[8px] text-mc-emerald">BUSY</span>
+                <span class="font-mc text-[8px] text-mc-white capitalize text-center leading-tight line-clamp-2">{itemLabel(cpu.job.item)}</span>
+                <span class="font-mc text-[9px] text-mc-amethyst">×{fmtQty(cpu.job.quantity)}</span>
+              </div>
+            ) : (
+              <span class={`font-mc text-[8px] z-10 ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}`}>{cpu.busy ? 'BUSY' : 'FREE'}</span>
+            )}
+            <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow">
+              <div class="h-full bg-mc-lapis transition-all duration-500" style={`width:${Math.min(100, cpu.coProcessors * 10)}%`} />
+            </div>
+            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-44 pointer-events-none">
+              <span class="font-mc text-[9px] text-mc-white">{cpu.name}</span>
+              <span class={`font-mc text-[9px] ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}`}>{cpu.busy ? 'BUSY' : 'FREE'}</span>
+              {cpu.job && (
+                <>
+                  <div class="border-t border-mc-cobble/50 my-0.5" />
+                  <span class="font-mc text-[9px] text-mc-white capitalize">{itemLabel(cpu.job.item)}</span>
+                  <span class="font-mc text-[8px] text-mc-muted">{cpu.job.item}</span>
+                  <span class="font-mc text-[8px] text-mc-amethyst">qty: {cpu.job.quantity.toLocaleString()}</span>
+                </>
+              )}
+              <div class="border-t border-mc-cobble/50 my-0.5" />
+              <div class="flex items-center gap-2">
+                <span class="font-mc text-[8px] text-mc-diamond w-14">STORAGE</span>
+                <span class="font-mc text-[8px] text-mc-white">{fmtBytes(cpu.storage)}B</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="font-mc text-[8px] text-mc-lapis w-14">CO-PROCS</span>
+                <span class="font-mc text-[8px] text-mc-white">{cpu.coProcessors}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div class="mt-4">
+        <ProgressBar value={cpus.busy} max={cpus.total || 1} colour="amethyst"
+          label="CPU Utilisation" showPercent id="progress-cpu" />
+      </div>
+    </Panel>
+  </section>
+
 </Layout>
 
 <script>
-  // Auto-refresh every 30 seconds
-  const REFRESH_MS = 30_000;
+  // ── Refresh intervals ──────────────────────────────────────────────────────
+  const OVERVIEW_MS  = 30_000;
+  const MACHINES_MS  =  8_000;
+  const STORAGE_MS   = 60_000;
+  const CRAFTING_MS  =  5_000;
+  const VELOCITY_MS  = 120_000;
 
+  // ── Shared helpers ─────────────────────────────────────────────────────────
+  function setEl(id: string, val: string) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  }
   function fmt(n: number, dec = 0): string {
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
     if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
     return n.toFixed(dec);
   }
-
-  // StatCard puts id on the value <span> directly
-  function setEl(id: string, val: string) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val;
+  function fmtQty(n: number): string {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k';
+    return String(n);
+  }
+  function fmtBytes(b: number): string {
+    if (b >= 1_000_000) return (b / 1_000_000).toFixed(1) + 'M';
+    if (b >= 1_000) return (b / 1_000).toFixed(0) + 'K';
+    return String(b);
+  }
+  function itemLabel(name: string): string {
+    return name.replace(/^.*:/, '').replace(/_/g, ' ');
   }
 
-  async function refresh() {
-    try {
-      const [eRes, aeRes, mRes] = await Promise.all([
-        fetch('/api/energy').then(r => r.json()),
-        fetch('/api/ae-summary').then(r => r.json()),
-        fetch('/api/machines').then(r => r.json()),
-      ]);
+  // ── Overview refresh ───────────────────────────────────────────────────────
+  function energyEta(stored: number, capacity: number, netFePt: number): string {
+    if (Math.abs(netFePt) < 1) return 'STABLE';
+    const fe = netFePt > 0 ? (capacity - stored) : stored;
+    const s = fe / (Math.abs(netFePt) * 20);
+    if (s < 60) return `${Math.round(s)}s`;
+    if (s < 3600) return `${Math.round(s / 60)}m`;
+    if (s < 86400) return `${(s / 3600).toFixed(1)}h`;
+    return `${(s / 86400).toFixed(1)}d`;
+  }
 
-      if (eRes.summary) {
-        const s = eRes.summary;
-        setEl('stat-stored-fe', fmt(s.stored_fe) + ' FE');
-        setEl('stat-energy-pct', s.percent.toFixed(1) + '%');
-      }
-      if (eRes.flow && Array.isArray(eRes.flow) && eRes.flow.length >= 2) {
-        const gen = eRes.flow[0]?.rate_fe_t ?? 0;
-        const con = eRes.flow[1]?.rate_fe_t ?? 0;
-        const net = gen - con;
-        setEl('stat-gen', fmt(gen) + ' FE/t');
-        setEl('stat-con', fmt(con) + ' FE/t');
-        setEl('stat-net', fmt(net) + ' FE/t');
-
-        // ETA
-        const stored = eRes.summary?.stored_fe ?? 0;
-        const capacity = eRes.summary?.capacity_fe ?? 0;
-        const etaEl = document.getElementById('stat-eta');
-        const etaLabelEl = etaEl?.closest('.mc-panel')?.querySelector('.font-mc.text-xs.text-mc-muted');
-        const eta = energyEta(stored, capacity, net);
-        if (etaEl) etaEl.textContent = eta;
-        if (etaLabelEl) etaLabelEl.textContent = net > 0 ? 'Full in' : net < 0 ? 'Empty in' : 'Stable';
-      }
-
-      function energyEta(stored: number, capacity: number, netFePt: number): string {
-        if (Math.abs(netFePt) < 1) return 'STABLE';
-        const fe = netFePt > 0 ? (capacity - stored) : stored;
-        const seconds = fe / (Math.abs(netFePt) * 20);
-        if (seconds < 60) return `${Math.round(seconds)}s`;
-        if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
-        if (seconds < 86400) return `${(seconds / 3600).toFixed(1)}h`;
-        return `${(seconds / 86400).toFixed(1)}d`;
-      }
-      if (aeRes.summary) {
-        const a = aeRes.summary;
-        setEl('stat-items', fmt(a.items_total));
-        setEl('stat-items-unique', fmt(a.items_unique));
-        setEl('stat-ae-energy', fmt(a.energy_usage) + ' FE/t');
-        const storagePct = a.item_storage_total > 0
-          ? ((a.item_storage_used / a.item_storage_total) * 100).toFixed(1) + '%'
-          : '—';
-        setEl('stat-storage-pct', storagePct);
-      }
-      if (aeRes.cpus) {
-        setEl('stat-cpus', `${aeRes.cpus.busy}/${aeRes.cpus.total}`);
-      }
-      if (mRes.summary) {
-        setEl('stat-machines-active', fmt(mRes.summary.active_machines));
-        setEl('stat-machines-total', fmt(mRes.summary.total_machines));
-      }
-
-      // Base health score
-      const energyPct   = eRes.summary?.percent ?? 0;
-      const machinePct  = mRes.summary?.active_percent ?? 0;
-      const storageUsed = aeRes.summary?.item_storage_used ?? 0;
-      const storageTotal = aeRes.summary?.item_storage_total ?? 1;
-      const storagePct  = (1 - storageUsed / storageTotal) * 100;
-      const score = Math.round(energyPct * 0.5 + machinePct * 0.3 + storagePct * 0.2);
-
-      setEl('health-score', String(score));
-      setEl('health-val-energy',   energyPct.toFixed(0) + '%');
-      setEl('health-val-machines', machinePct.toFixed(0) + '%');
-      setEl('health-val-storage',  storagePct.toFixed(0) + '%');
-
-      const statusEl = document.getElementById('health-status');
-      const scoreEl  = document.getElementById('health-score');
-      const statusText = score >= 80 ? 'NOMINAL' : score >= 60 ? 'DEGRADED' : score >= 40 ? 'WARNING' : 'CRITICAL';
-      const statusColour = score >= 80 ? 'text-mc-emerald glow-emerald' : score >= 60 ? 'text-mc-gold glow-gold' : score >= 40 ? 'text-mc-copper' : 'text-mc-redstone glow-redstone';
-      if (statusEl) { statusEl.textContent = statusText; statusEl.className = `font-mc text-xs text-center ${statusColour}`; }
-      if (scoreEl)  { scoreEl.className = `font-mc text-5xl leading-none ${statusColour}`; }
-
-      // Health bars
-      const bars: [string, number][] = [
-        ['health-bar-energy',   energyPct],
-        ['health-bar-machines', machinePct],
-        ['health-bar-storage',  storagePct],
-      ];
-      for (const [id, val] of bars) {
-        const bar = document.getElementById(id) as HTMLElement | null;
-        if (bar) bar.style.width = `${Math.min(100, val)}%`;
-      }
-
-      const el = document.getElementById('last-updated');
-      if (el) el.textContent = `UPDATED ${new Date().toLocaleTimeString()}`;
-    } catch (err) {
-      console.error('Refresh error', err);
+  async function refreshOverview() {
+    const [eRes, aeRes, mRes] = await Promise.all([
+      fetch('/api/energy').then(r => r.json()),
+      fetch('/api/ae-summary').then(r => r.json()),
+      fetch('/api/machines').then(r => r.json()),
+    ]);
+    if (eRes.summary) {
+      const s = eRes.summary;
+      setEl('stat-stored-fe', fmt(s.stored_fe) + ' FE');
+      setEl('stat-energy-pct', s.percent.toFixed(1) + '%');
+    }
+    if (eRes.flow?.length >= 2) {
+      const gen = eRes.flow[0]?.rate_fe_t ?? 0;
+      const con = eRes.flow[1]?.rate_fe_t ?? 0;
+      const net = gen - con;
+      setEl('stat-gen', fmt(gen) + ' FE/t');
+      setEl('stat-con', fmt(con) + ' FE/t');
+      setEl('stat-net', fmt(net) + ' FE/t');
+      const stored = eRes.summary?.stored_fe ?? 0;
+      const capacity = eRes.summary?.capacity_fe ?? 0;
+      setEl('stat-eta', energyEta(stored, capacity, net));
+    }
+    if (aeRes.summary) {
+      const a = aeRes.summary;
+      setEl('stat-items', fmt(a.items_total));
+      setEl('stat-items-unique', fmt(a.items_unique));
+      setEl('stat-ae-energy', fmt(a.energy_usage) + ' FE/t');
+      setEl('stat-storage-pct', a.item_storage_total > 0 ? ((a.item_storage_used / a.item_storage_total) * 100).toFixed(1) + '%' : '—');
+      setEl('stat-cpus', `${aeRes.cpus?.busy ?? 0}/${aeRes.cpus?.total ?? 0}`);
+    }
+    if (mRes.summary) {
+      setEl('stat-machines-active', fmt(mRes.summary.active_machines));
+      setEl('stat-machines-total', fmt(mRes.summary.total_machines));
+    }
+    // Health score
+    const energyPct  = eRes.summary?.percent ?? 0;
+    const machinePct = mRes.summary?.active_percent ?? 0;
+    const su = aeRes.summary?.item_storage_used ?? 0;
+    const st = aeRes.summary?.item_storage_total ?? 1;
+    const storageFree = (1 - su / st) * 100;
+    const score = Math.round(energyPct * 0.5 + machinePct * 0.3 + storageFree * 0.2);
+    setEl('health-score', String(score));
+    setEl('health-val-energy', energyPct.toFixed(0) + '%');
+    setEl('health-val-machines', machinePct.toFixed(0) + '%');
+    setEl('health-val-storage', storageFree.toFixed(0) + '%');
+    const colour = score >= 80 ? 'text-mc-emerald glow-emerald' : score >= 60 ? 'text-mc-gold' : 'text-mc-redstone';
+    const statusText = score >= 80 ? 'NOMINAL' : score >= 60 ? 'DEGRADED' : score >= 40 ? 'WARNING' : 'CRITICAL';
+    const scoreEl = document.getElementById('health-score');
+    const statusEl = document.getElementById('health-status');
+    if (scoreEl) scoreEl.className = `font-mc text-5xl leading-none ${colour}`;
+    if (statusEl) { statusEl.textContent = statusText; statusEl.className = `font-mc text-xs text-center ${colour}`; }
+    for (const [id, val] of [['health-bar-energy', energyPct], ['health-bar-machines', machinePct], ['health-bar-storage', storageFree]] as [string, number][]) {
+      const bar = document.getElementById(id) as HTMLElement | null;
+      if (bar) bar.style.width = `${Math.min(100, val)}%`;
     }
   }
 
-  setInterval(refresh, REFRESH_MS);
+  // ── Machine grid refresh ───────────────────────────────────────────────────
+  const MCOLOURS: Record<string, string> = {
+    enrichment_chamber: 'copper', crusher: 'copper', purification_chamber: 'copper',
+    energized_smelter: 'gold', osmium_compressor: 'gold', combiner: 'gold',
+    metallurgic_infuser: 'amethyst', chemical_infuser: 'amethyst', chemical_injection_chamber: 'amethyst',
+    electrolytic_separator: 'diamond', solar_neutron_activator: 'diamond', isotopic_centrifuge: 'diamond',
+    precision_sawmill: 'emerald',
+  };
+  const MI_COLOURS: Record<string, string> = {
+    assembler: 'amethyst', macerator: 'copper', compressor: 'gold', mixer: 'diamond',
+    furnace: 'gold', electrolyzer: 'diamond', centrifuge: 'emerald',
+    cutting_machine: 'copper', packer: 'white', unpacker: 'white',
+  };
+  function mColour(type: string) { return MCOLOURS[type] ?? 'white'; }
+  function miColour(label: string) { return MI_COLOURS[label.replace(/ /g, '_')] ?? 'white'; }
+  function fmtType(type: string) {
+    return type.replace(/^basic/, 'B.').replace(/^advanced/, 'A.').replace(/^elite/, 'E.')
+      .replace(/^ultimate/, 'U.').replace(/Factory$/, 'Fac')
+      .replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ');
+  }
+
+  type MekM = { name: string; type: string; active: boolean; energy_percent: number; progress_percent: number; progress_total: number };
+  type MIM  = { name: string; type: string; active: boolean; energy_percent: number; occupied_slots?: number; total_slots?: number };
+
+  function buildMekCell(m: MekM, col: string): string {
+    const name = m.name.replace(/_/g, ' ').replace(/mekanism /i, '').slice(0, 10);
+    const pctE = Math.min(100, m.energy_percent);
+    return `${m.active ? `<div class="absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none"></div>` : ''}
+      <span class="font-mc text-[8px] leading-none z-10 px-0.5 text-center w-full truncate ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">${name}</span>
+      <span class="w-1.5 h-1.5 z-10 ${m.active ? `bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]` : 'bg-mc-stone'}"></span>
+      <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${pctE}%"></div></div>
+      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
+        <span class="font-mc text-[9px] text-mc-white capitalize">${m.name.replace(/_/g, ' ')}</span>
+        <span class="font-mc text-[9px] ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
+        <div class="flex items-center gap-1 mt-0.5">
+          <span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span>
+          <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${pctE}%"></div></div>
+          <span class="font-mc text-[8px] text-mc-gold">${pctE.toFixed(0)}%</span>
+        </div>
+      </div>`;
+  }
+
+  function buildMICell(m: MIM, col: string): string {
+    const name = m.name.replace(/_/g, ' ').replace(/modern industrialization /i, '').slice(0, 10);
+    const isSteam = m.type.includes('steel_');
+    const slotPct = m.total_slots ? Math.min(100, (m.occupied_slots ?? 0) / m.total_slots * 100) : 0;
+    const barPct = isSteam ? slotPct : Math.min(100, m.energy_percent);
+    const barC = isSteam ? 'var(--color-mc-diamond)' : 'var(--color-mc-gold)';
+    const energyRow = !isSteam ? `<div class="flex items-center gap-1 mt-0.5"><span class="font-mc text-[8px] text-mc-gold w-10">ENERGY</span><div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${barPct}%"></div></div><span class="font-mc text-[8px] text-mc-gold">${barPct.toFixed(0)}%</span></div>` : '';
+    const slotsRow = m.occupied_slots != null && m.total_slots != null ? `<div class="flex items-center gap-1"><span class="font-mc text-[8px] text-mc-diamond w-10">SLOTS</span><span class="font-mc text-[8px] text-mc-diamond">${m.occupied_slots}/${m.total_slots}</span></div>` : '';
+    return `${m.active ? `<div class="absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none"></div>` : ''}
+      <span class="font-mc text-[8px] leading-none z-10 px-0.5 text-center w-full truncate ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">${name}</span>
+      <span class="w-1.5 h-1.5 z-10 ${m.active ? `bg-mc-emerald shadow-[0_0_4px_var(--color-mc-emerald)]` : 'bg-mc-stone'}"></span>
+      <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow"><div class="h-full transition-all" style="width:${barPct}%;background-color:${barC}"></div></div>
+      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-36 pointer-events-none">
+        <span class="font-mc text-[9px] text-mc-white capitalize">${m.name.replace(/_/g, ' ')}</span>
+        <span class="font-mc text-[9px] ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
+        ${energyRow}${slotsRow}
+      </div>`;
+  }
+
+  function renderMachineGrid(containerId: string, machines: (MekM | MIM)[], buildCell: (m: any, col: string) => string, getCol: (type: string) => string, getLabel: (type: string) => string) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const byType: Record<string, typeof machines> = {};
+    for (const m of machines) (byType[m.type] ??= []).push(m);
+    for (const [type, group] of Object.entries(byType)) {
+      let groupEl = container.querySelector(`[data-type-group="${type}"]`) as HTMLElement | null;
+      const active = group.filter(m => m.active).length;
+      const col = getCol(type);
+      if (!groupEl) {
+        groupEl = document.createElement('div');
+        groupEl.dataset.typeGroup = type;
+        container.appendChild(groupEl);
+      }
+      const header = groupEl.querySelector('[data-active-count]');
+      if (header) { header.textContent = String(active); }
+      let cells = groupEl.querySelector('.flex.flex-wrap') as HTMLElement | null;
+      if (!cells) {
+        groupEl.innerHTML = `<div class="flex items-center gap-3 mb-2"><span class="font-mc text-xs text-mc-${col} uppercase tracking-widest">${getLabel(type)}</span><span class="font-mc text-xs text-mc-muted"><span class="text-mc-emerald" data-active-count="${type}">${active}</span>/${group.length}</span></div><div class="flex flex-wrap gap-2"></div>`;
+        cells = groupEl.querySelector('.flex.flex-wrap');
+      }
+      if (!cells) continue;
+      for (const m of group) {
+        let cell = cells.querySelector(`[data-machine="${m.name}"]`) as HTMLElement | null;
+        const wasActive = cell?.dataset.active === '1';
+        if (!cell) { cell = document.createElement('div'); cells.appendChild(cell); }
+        cell.dataset.machine = m.name; cell.dataset.active = m.active ? '1' : '0';
+        cell.innerHTML = buildCell(m, col);
+        cell.className = `machine-cell group relative cursor-default transition-all duration-300 pixel-border w-14 h-14 flex flex-col items-center justify-center gap-0.5 ${m.active ? `bg-mc-${col}/20` : 'bg-mc-stone/40'}`;
+        if (wasActive !== m.active) {
+          cell.classList.add(m.active ? 'animate-ping-once' : 'opacity-50');
+          setTimeout(() => cell!.classList.remove('animate-ping-once', 'opacity-50'), 600);
+        }
+      }
+    }
+  }
+
+  async function refreshMachines() {
+    const data = await fetch('/api/machines').then(r => r.json());
+    if (data.error) return;
+    if (data.summary) {
+      setEl('stat-mach-active', String(data.summary.active_machines));
+      setEl('stat-mach-total', String(data.summary.total_machines));
+      setEl('stat-mach-pct', data.summary.active_percent.toFixed(1) + '%');
+    }
+    if (data.mekanism) renderMachineGrid('mek-grid', data.mekanism, buildMekCell, mColour, fmtType);
+    if (data.mi) renderMachineGrid('mi-grid', data.mi, buildMICell, (t) => miColour(t.replace('modern_industrialization:', '').replace(/_/g, ' ')), (t) => t.replace('modern_industrialization:', '').replace(/_/g, ' '));
+  }
+
+  // ── Storage refresh ────────────────────────────────────────────────────────
+  let sortMode: 'count' | 'name' = 'count';
+  let sortDir: 'desc' | 'asc' = 'desc';
+  let allItems: { item: string; count: number }[] = [];
+
+  function sortItems(items: { item: string; count: number }[]) {
+    const copy = [...items];
+    if (sortMode === 'name') copy.sort((a, b) => { const c = itemLabel(a.item).localeCompare(itemLabel(b.item)); return sortDir === 'asc' ? c : -c; });
+    else copy.sort((a, b) => sortDir === 'desc' ? b.count - a.count : a.count - b.count);
+    return copy;
+  }
+
+  function updateSortButtons() {
+    const btnC = document.getElementById('sort-count');
+    const btnN = document.getElementById('sort-name');
+    if (btnC) {
+      btnC.textContent = 'COUNT' + (sortMode === 'count' ? (sortDir === 'desc' ? ' ▼' : ' ▲') : '');
+      btnC.className = `mc-slot px-3 py-1.5 font-mc text-xs ${sortMode === 'count' ? 'text-mc-diamond' : 'text-mc-muted'}`;
+    }
+    if (btnN) {
+      btnN.textContent = 'NAME' + (sortMode === 'name' ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
+      btnN.className = `mc-slot px-3 py-1.5 font-mc text-xs ${sortMode === 'name' ? 'text-mc-diamond' : 'text-mc-muted'}`;
+    }
+  }
+
+  function renderItems(items: { item: string; count: number }[]) {
+    const list = document.getElementById('item-list');
+    if (!list) return;
+    const sorted = sortItems(items);
+    list.innerHTML = sorted.length === 0
+      ? '<p class="font-mc text-xs text-mc-muted px-4 py-6">No items found</p>'
+      : sorted.map(i => `<div class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors cursor-pointer item-row" data-item="${i.item}">
+          <div class="flex flex-col gap-0.5">
+            <span class="font-mc text-xs text-mc-white capitalize">${itemLabel(i.item)}</span>
+            <span class="font-mc text-xs text-mc-muted">${i.item}</span>
+          </div>
+          <span class="font-mc text-sm text-mc-diamond">${fmt(i.count)}</span>
+        </div>`).join('');
+  }
+
+  async function loadItems(q?: string) {
+    const url = q ? `/api/ae-items?q=${encodeURIComponent(q)}` : '/api/ae-items';
+    const data = await fetch(url).then(r => r.json());
+    if (data.items) { allItems = data.items; renderItems(allItems); }
+  }
+
+  function renderVelocity(selector: string, items: { item: string; delta: number }[], sign: 1 | -1, colour: string, emptyMsg: string) {
+    const panel = document.querySelector(selector) as HTMLElement | null;
+    if (!panel) return;
+    const container = panel.querySelector('.divide-y') as HTMLElement | null;
+    if (!container) return;
+    const filtered = items.filter(v => Math.sign(v.delta) === sign);
+    if (filtered.length === 0) { container.innerHTML = `<p class="font-mc text-xs text-mc-muted px-4 py-4">${emptyMsg}</p>`; return; }
+    const max = Math.abs(filtered[0]?.delta ?? 1);
+    container.innerHTML = filtered.slice(0, 8).map(v => {
+      const pct = Math.min(100, (Math.abs(v.delta) / max) * 100);
+      const label = v.item.replace(/^.*:/, '').replace(/_/g, ' ');
+      const fmtDelta = sign === 1 ? `+${fmt(v.delta)}` : fmt(v.delta);
+      return `<div class="px-4 py-2 flex flex-col gap-1"><div class="flex items-center justify-between"><span class="font-mc text-xs text-mc-white capitalize">${label}</span><span class="font-mc text-xs ${colour}">${fmtDelta}</span></div><div class="mc-progress-track"><div class="mc-progress-fill" style="width:${pct}%;background-color:${colour === 'text-mc-emerald' ? 'var(--color-mc-emerald)' : 'var(--color-mc-redstone)'};opacity:0.6"></div></div></div>`;
+    }).join('');
+  }
+
+  async function loadVelocity() {
+    const data = await fetch('/api/ae-items?velocity=1').then(r => r.json()).catch(() => null);
+    if (!data?.velocity) return;
+    renderVelocity('[data-panel="producers"]', data.velocity, 1, 'text-mc-emerald', 'No production detected');
+    renderVelocity('[data-panel="consumers"]', data.velocity, -1, 'text-mc-redstone', 'No consumption detected');
+  }
+
+  document.getElementById('sort-count')?.addEventListener('click', () => {
+    sortMode === 'count' ? (sortDir = sortDir === 'desc' ? 'asc' : 'desc') : (sortMode = 'count', sortDir = 'desc');
+    updateSortButtons(); renderItems(allItems);
+  });
+  document.getElementById('sort-name')?.addEventListener('click', () => {
+    sortMode === 'name' ? (sortDir = sortDir === 'asc' ? 'desc' : 'asc') : (sortMode = 'name', sortDir = 'asc');
+    updateSortButtons(); renderItems(allItems);
+  });
+
+  let searchTimeout: ReturnType<typeof setTimeout>;
+  let currentQuery = '';
+  const searchInput = document.getElementById('item-search') as HTMLInputElement | null;
+  searchInput?.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => { currentQuery = searchInput.value.trim(); loadItems(currentQuery || undefined); }, 300);
+  });
+
+  // ── Crafting refresh ───────────────────────────────────────────────────────
+  type Job  = { item: string; cpu: string; cpu_index: number; quantity: number };
+  type CPU  = { name: string; storage: number; coProcessors: number; busy: boolean };
+
+  function buildCpuCell(cpu: CPU, job: Job | null): string {
+    const num = cpu.name.replace(/[^0-9]/g, '') || cpu.name.slice(-2);
+    const coproPct = Math.min(100, cpu.coProcessors * 10);
+    const hasJob = job !== null;
+    const itemLine = hasJob
+      ? `<div class="flex flex-col items-center gap-0.5 z-10 px-1 w-full"><span class="font-mc text-[8px] text-mc-emerald">BUSY</span><span class="font-mc text-[8px] text-mc-white capitalize text-center leading-tight" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${itemLabel(job!.item)}</span><span class="font-mc text-[9px] text-mc-amethyst">×${fmtQty(job!.quantity)}</span></div>`
+      : `<span class="font-mc text-[8px] z-10 ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}">${cpu.busy ? 'BUSY' : 'FREE'}</span>`;
+    const jobTooltip = hasJob
+      ? `<div class="border-t border-mc-cobble/50 my-0.5"></div><span class="font-mc text-[9px] text-mc-white capitalize">${itemLabel(job!.item)}</span><span class="font-mc text-[8px] text-mc-muted">${job!.item}</span><span class="font-mc text-[8px] text-mc-amethyst">qty: ${job!.quantity.toLocaleString()}</span>` : '';
+    return `${cpu.busy ? `<div class="absolute inset-0 animate-pulse opacity-10 bg-mc-amethyst pointer-events-none"></div>` : ''}
+      <span class="font-mc text-[10px] z-10 ${cpu.busy ? 'text-mc-amethyst' : 'text-mc-muted'}">${num}</span>
+      <span class="w-2 h-2 z-10 ${cpu.busy ? 'bg-mc-emerald shadow-[0_0_6px_var(--color-mc-emerald)]' : 'bg-mc-stone'}"></span>
+      ${itemLine}
+      <div class="absolute bottom-0 left-0 right-0 h-1 bg-mc-shadow"><div class="h-full bg-mc-lapis" style="width:${coproPct}%"></div></div>
+      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-44 pointer-events-none">
+        <span class="font-mc text-[9px] text-mc-white">${cpu.name}</span>
+        <span class="font-mc text-[9px] ${cpu.busy ? 'text-mc-emerald' : 'text-mc-muted'}">${cpu.busy ? 'BUSY' : 'FREE'}</span>
+        ${jobTooltip}
+        <div class="border-t border-mc-cobble/50 my-0.5"></div>
+        <div class="flex items-center gap-2"><span class="font-mc text-[8px] text-mc-diamond w-14">STORAGE</span><span class="font-mc text-[8px] text-mc-white">${fmtBytes(cpu.storage)}B</span></div>
+        <div class="flex items-center gap-2"><span class="font-mc text-[8px] text-mc-lapis w-14">CO-PROCS</span><span class="font-mc text-[8px] text-mc-white">${cpu.coProcessors}</span></div>
+      </div>`;
+  }
+
+  function renderCrafting(data: { total: number; busy: number; busy_percent: number; cpus: CPU[] }, jobs: Job[]) {
+    setEl('stat-craft-cpus', `${data.busy}/${data.total}`);
+    setEl('stat-craft-jobs', String(jobs.length));
+    setEl('stat-craft-free', String(data.total - data.busy));
+    const fill = document.getElementById('progress-cpu') as HTMLElement | null;
+    if (fill) fill.style.width = `${data.busy_percent.toFixed(1)}%`;
+    const pctSpan = document.getElementById('progress-cpu-pct') as HTMLElement | null;
+    if (pctSpan) pctSpan.textContent = `${data.busy_percent.toFixed(1)}%`;
+    const grid = document.getElementById('cpu-grid');
+    if (!grid) return;
+    const jobMap = new Map(jobs.map(j => [j.cpu_index, j]));
+    for (let i = 0; i < data.cpus.length; i++) {
+      const cpu = data.cpus[i]!;
+      const job = jobMap.get(i + 1) ?? null;
+      let cell = grid.querySelector(`[data-cpu-index="${i + 1}"]`) as HTMLElement | null;
+      const wasBusy = cell?.dataset.busy === '1';
+      if (!cell) { cell = document.createElement('div'); grid.appendChild(cell); }
+      cell.dataset.cpu = cpu.name; cell.dataset.cpuIndex = String(i + 1); cell.dataset.busy = cpu.busy ? '1' : '0';
+      cell.innerHTML = buildCpuCell(cpu, job);
+      cell.className = ['group relative cursor-default pixel-border transition-all duration-300',
+        'flex flex-col items-center justify-center gap-1',
+        job ? 'w-32 h-28' : 'w-20 h-20',
+        cpu.busy ? 'bg-mc-amethyst/20' : 'bg-mc-stone/40'].join(' ');
+      if (wasBusy !== cpu.busy) {
+        cell.classList.add(cpu.busy ? 'scale-105' : 'opacity-60');
+        setTimeout(() => cell!.classList.remove('scale-105', 'opacity-60'), 400);
+      }
+    }
+  }
+
+  async function refreshCrafting() {
+    const data = await fetch('/api/crafting').then(r => r.json());
+    if (data.error) return;
+    if (data.cpus) renderCrafting(data.cpus, data.jobs ?? []);
+  }
+
+  // ── Kick off all loops ────────────────────────────────────────────────────
+  setInterval(refreshOverview, OVERVIEW_MS);
+  setInterval(refreshMachines, MACHINES_MS);
+  setInterval(() => loadItems(currentQuery || undefined), STORAGE_MS);
+  setInterval(loadVelocity, VELOCITY_MS);
+  setInterval(refreshCrafting, CRAFTING_MS);
+
+  // Immediate first load
+  refreshOverview();
+  refreshMachines();
+  loadItems();
+  loadVelocity();
+  refreshCrafting();
 </script>
