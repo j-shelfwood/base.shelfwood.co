@@ -504,14 +504,15 @@ export interface CraftingJob {
   cpu_index: number;
   quantity: number;
   crafted: number;
-  completion: number;
+  completion: number;       // 0-100, may be estimated
+  is_estimated: boolean;    // true = completion derived from item-count delta
+  elapsed_s: number;        // seconds since job was first seen by collector
+  job_start_ms: number;     // epoch ms when job was first seen
 }
 
 export async function craftingJobs(): Promise<CraftingJob[]> {
   // ae_crafting_job is written every AE poll cycle (~60s) while a job is running.
   // Use a 10-cycle window (10m) to tolerate collector restarts / timing jitter.
-  // We cross-reference with ae_crafting_cpu (busy flag) to avoid showing stale jobs:
-  // only return jobs whose CPU is still marked busy in the summary.
   const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
   |> range(start: -10m)
@@ -523,10 +524,15 @@ from(bucket: "${INFLUX_BUCKET}")
   |> pivot(rowKey: ["_time", "item", "cpu", "cpu_index", "node"], columnKey: ["_field"], valueColumn: "_value")
   |> filter(fn: (r) => r.completion < 100)
 `);
+
+  const nowMs = Date.now();
+
   return rows.map(r => {
     const cpuName = String(r.cpu ?? 'unnamed');
     const idx = r.cpu_index != null ? Number(r.cpu_index) : 0;
     const displayCpu = cpuName.toLowerCase() === 'unnamed' ? `CPU ${idx}` : cpuName;
+    const jobStartMs = (r.job_start_ms as number) ?? 0;
+    const elapsedS = jobStartMs > 0 ? Math.floor((nowMs - jobStartMs) / 1000) : 0;
     return {
       item: String(r.item ?? ''),
       cpu: displayCpu,
@@ -534,6 +540,9 @@ from(bucket: "${INFLUX_BUCKET}")
       quantity: (r.quantity as number) ?? 0,
       crafted: (r.crafted as number) ?? 0,
       completion: (r.completion as number) ?? 0,
+      is_estimated: ((r.is_estimated as number) ?? 0) > 0,
+      elapsed_s: elapsedS,
+      job_start_ms: jobStartMs,
     };
   });
 }

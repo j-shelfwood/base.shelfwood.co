@@ -22,6 +22,13 @@ function fmtBytes(b: number): string {
   if (b >= 1_000) return (b / 1_000).toFixed(0) + 'K';
   return String(b);
 }
+
+function fmtElapsed(s: number): string {
+  if (s <= 0) return '';
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
+  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+}
 ---
 
 <Layout title="MC Base — Crafting">
@@ -134,12 +141,17 @@ function fmtBytes(b: number): string {
                 <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(job.item)}</span>
                 <span class="font-mc text-xs text-mc-muted">{job.item}</span>
               </div>
-              <span class="font-mc text-xs text-mc-amethyst shrink-0 ml-2">CPU: {job.cpu}</span>
+              <div class="flex flex-col items-end gap-0.5 shrink-0 ml-2">
+                <span class="font-mc text-xs text-mc-amethyst">CPU: {job.cpu}</span>
+                {job.elapsed_s > 0 && (
+                  <span class="font-mc text-[9px] text-mc-muted">{fmtElapsed(job.elapsed_s)}</span>
+                )}
+              </div>
             </div>
             <ProgressBar
               value={job.completion}
               colour="amethyst"
-              label={`${job.crafted.toLocaleString()} / ${job.quantity.toLocaleString()} crafted`}
+              label={`${job.crafted.toLocaleString()} / ${job.quantity.toLocaleString()} crafted${job.is_estimated ? ' (est.)' : ''}`}
               showPercent
             />
           </div>
@@ -155,7 +167,8 @@ function fmtBytes(b: number): string {
 
   let jobSortMode: 'completion' | 'name' = 'completion';
   let jobSortDir: 'desc' | 'asc' = 'desc';
-  let lastJobs: { item: string; cpu: string; quantity: number; crafted: number; completion: number }[] = [];
+  type Job = { item: string; cpu: string; cpu_index: number; quantity: number; crafted: number; completion: number; is_estimated: boolean; elapsed_s: number; job_start_ms: number };
+  let lastJobs: Job[] = [];
 
   function itemLabel(name: string): string {
     return name.replace(/^.*:/, '').replace(/_/g, ' ');
@@ -170,6 +183,13 @@ function fmtBytes(b: number): string {
   function setEl(id: string, val: string) {
     const el = document.getElementById(id);
     if (el) el.textContent = val;
+  }
+
+  function fmtElapsed(s: number): string {
+    if (s <= 0) return '';
+    if (s < 60) return `${s}s`;
+    if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
+    return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
   }
 
   function sortJobs<T extends { item: string; completion: number }>(jobs: T[]): T[] {
@@ -286,7 +306,7 @@ function fmtBytes(b: number): string {
     }
   }
 
-  function renderJobs(jobs: { item: string; cpu: string; quantity: number; crafted: number; completion: number }[]) {
+  function renderJobs(jobs: Job[]) {
     lastJobs = jobs;
     const list = document.getElementById('job-list');
     if (!list) return;
@@ -297,8 +317,15 @@ function fmtBytes(b: number): string {
       return;
     }
 
+    // Recompute elapsed from job_start_ms at render time so it ticks on each 5s refresh
+    const nowMs = Date.now();
+
     list.innerHTML = sortJobs(jobs).map(job => {
       const pct = Math.min(100, Math.max(0, job.completion));
+      const elapsedS = job.job_start_ms > 0 ? Math.floor((nowMs - job.job_start_ms) / 1000) : job.elapsed_s;
+      const elapsedStr = fmtElapsed(elapsedS);
+      const craftedLabel = `${job.crafted.toLocaleString()} / ${job.quantity.toLocaleString()} crafted${job.is_estimated ? ' (est.)' : ''}`;
+      const pctLabel = pct > 0 ? `${pct.toFixed(1)}%${job.is_estimated ? '~' : ''}` : '—';
       return `
         <div class="px-4 py-3 border-b border-mc-cobble/50 last:border-0">
           <div class="flex items-center justify-between mb-2">
@@ -306,15 +333,18 @@ function fmtBytes(b: number): string {
               <span class="font-mc text-xs text-mc-white capitalize">${itemLabel(job.item)}</span>
               <span class="font-mc text-xs text-mc-muted">${job.item}</span>
             </div>
-            <span class="font-mc text-xs text-mc-amethyst shrink-0 ml-2">CPU: ${job.cpu}</span>
+            <div class="flex flex-col items-end gap-0.5 shrink-0 ml-2">
+              <span class="font-mc text-xs text-mc-amethyst">CPU: ${job.cpu}</span>
+              ${elapsedStr ? `<span class="font-mc text-[9px] text-mc-muted">${elapsedStr}</span>` : ''}
+            </div>
           </div>
           <div class="flex flex-col gap-1">
             <div class="flex justify-between">
-              <span class="font-mc text-xs text-mc-muted">${job.crafted.toLocaleString()} / ${job.quantity.toLocaleString()} crafted</span>
-              <span class="font-mc text-xs text-mc-white">${pct.toFixed(1)}%</span>
+              <span class="font-mc text-xs text-mc-muted">${craftedLabel}</span>
+              <span class="font-mc text-xs ${job.is_estimated ? 'text-mc-muted' : 'text-mc-white'}">${pctLabel}</span>
             </div>
             <div class="mc-progress-track">
-              <div class="mc-progress-fill" style="width:${pct}%;background-color:var(--color-mc-amethyst)">
+              <div class="mc-progress-fill" style="width:${pct}%;background-color:var(--color-mc-amethyst)${job.is_estimated ? ';opacity:0.6' : ''}">
                 <span class="absolute inset-0 top-0 bottom-1/2 bg-white/20"></span>
               </div>
             </div>
