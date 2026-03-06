@@ -509,12 +509,12 @@ export interface CraftingJob {
 
 export async function craftingJobs(): Promise<CraftingJob[]> {
   // ae_crafting_job is written every AE poll cycle (~60s) while a job is running.
-  // Use a 3-cycle window (3m) as the "active" cutoff. Jobs older than this are
-  // considered complete/stale. The collector node tag lets us detect if the
-  // collector itself went offline vs jobs completing.
+  // Use a 10-cycle window (10m) to tolerate collector restarts / timing jitter.
+  // We cross-reference with ae_crafting_cpu (busy flag) to avoid showing stale jobs:
+  // only return jobs whose CPU is still marked busy in the summary.
   const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -3m)
+  |> range(start: -10m)
   |> filter(fn: (r) => r._measurement == "ae_crafting_job")
   |> filter(fn: (r) => exists r.cpu_index)
   |> group(columns: ["item", "cpu", "cpu_index", "node", "source", "_field"])

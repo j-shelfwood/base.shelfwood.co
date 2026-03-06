@@ -3,7 +3,7 @@ interface Props {
   value: number;      // 0–100
   max?: number;       // default 100
   label?: string;
-  colour?: 'gold' | 'diamond' | 'emerald' | 'redstone';
+  colour?: 'gold' | 'diamond' | 'emerald' | 'redstone' | 'amethyst' | 'lapis';
   showPercent?: boolean;
   id?: string;
 }
@@ -24,6 +24,8 @@ const fillColour: Record<string, string> = {
   diamond: 'background-color: var(--color-mc-diamond)',
   emerald: 'background-color: var(--color-mc-emerald)',
   redstone: 'background-color: var(--color-mc-redstone)',
+  amethyst: 'background-color: var(--color-mc-amethyst)',
+  lapis: 'background-color: var(--color-mc-lapis)',
 };
 
 const style = fillColour[colour] ?? fillColour.emerald;

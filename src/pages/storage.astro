@@ -325,4 +325,10 @@ function itemLabel(registryName: string): string {
 
   // Auto-refresh items
   setInterval(() => loadItems(currentQuery || undefined), REFRESH_MS);
+
+  // Populate allItems immediately (SSR renders the list but allItems starts empty,
+  // so sort/filter would produce nothing until the first 60s tick)
+  loadItems();
+  // Refresh velocity immediately (interval is 2min, too long to wait on load)
+  loadVelocity();
 </script>

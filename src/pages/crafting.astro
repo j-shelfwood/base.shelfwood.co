@@ -250,14 +250,11 @@ function fmtBytes(b: number): string {
     setEl('stat-cpus', `${data.busy}/${data.total}`);
     setEl('stat-free', String(data.total - data.busy));
 
-    // Progress bar
-    const bar = document.getElementById('progress-cpu');
-    if (bar) {
-      const fill = bar.querySelector('.mc-progress-fill') as HTMLElement | null;
-      if (fill) fill.style.width = `${data.busy_percent.toFixed(1)}%`;
-      const pctSpan = bar.querySelector('.pct-label') as HTMLElement | null;
-      if (pctSpan) pctSpan.textContent = `${data.busy_percent.toFixed(1)}%`;
-    }
+    // Progress bar — ProgressBar component uses id="progress-cpu" on fill, id="progress-cpu-pct" on label
+    const fill = document.getElementById('progress-cpu') as HTMLElement | null;
+    if (fill) fill.style.width = `${data.busy_percent.toFixed(1)}%`;
+    const pctSpan = document.getElementById('progress-cpu-pct') as HTMLElement | null;
+    if (pctSpan) pctSpan.textContent = `${data.busy_percent.toFixed(1)}%`;
 
     // CPU grid — patch cells in place
     const grid = document.getElementById('cpu-grid');
