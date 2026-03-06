@@ -478,6 +478,7 @@ from(bucket: "${INFLUX_BUCKET}")
 export interface CraftingJob {
   item: string;
   cpu: string;
+  cpu_index: number;
   quantity: number;
   crafted: number;
   completion: number;
@@ -492,15 +493,24 @@ export async function craftingJobs(): Promise<CraftingJob[]> {
 from(bucket: "${INFLUX_BUCKET}")
   |> range(start: -3m)
   |> filter(fn: (r) => r._measurement == "ae_crafting_job")
+  |> filter(fn: (r) => exists r.cpu_index)
+  |> group(columns: ["item", "cpu", "cpu_index", "node", "source", "_field"])
   |> last()
-  |> pivot(rowKey: ["_time", "item", "cpu", "node"], columnKey: ["_field"], valueColumn: "_value")
+  |> group()
+  |> pivot(rowKey: ["_time", "item", "cpu", "cpu_index", "node"], columnKey: ["_field"], valueColumn: "_value")
   |> filter(fn: (r) => r.completion < 100)
 `);
-  return rows.map(r => ({
-    item: String(r.item ?? ''),
-    cpu: String(r.cpu ?? ''),
-    quantity: (r.quantity as number) ?? 0,
-    crafted: (r.crafted as number) ?? 0,
-    completion: (r.completion as number) ?? 0,
-  }));
+  return rows.map(r => {
+    const cpuName = String(r.cpu ?? 'unnamed');
+    const idx = r.cpu_index != null ? Number(r.cpu_index) : 0;
+    const displayCpu = cpuName.toLowerCase() === 'unnamed' ? `CPU ${idx}` : cpuName;
+    return {
+      item: String(r.item ?? ''),
+      cpu: displayCpu,
+      cpu_index: idx,
+      quantity: (r.quantity as number) ?? 0,
+      crafted: (r.crafted as number) ?? 0,
+      completion: (r.completion as number) ?? 0,
+    };
+  });
 }
