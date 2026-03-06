@@ -63,7 +63,8 @@ const minValue = data.length > 0 ? Math.min(...data.map(p => p.value)) : null;
   {data.length > 0 ? (
     <svg
       viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-      class="w-full"
+      class="w-full block"
+      preserveAspectRatio="none"
       style={`height: ${HEIGHT}px`}
       aria-hidden="true"
     >
@@ -87,7 +88,7 @@ const minValue = data.length > 0 ? Math.min(...data.map(p => p.value)) : null;
         />
       )}
     </svg>
-    <div class="flex justify-between font-mc text-xs text-mc-muted">
+    <div class="flex justify-between font-mc text-sm text-mc-muted">
       <span>{minValue?.toFixed(1)}{suffix}</span>
       <span style={`color: ${colour}`}>{lastValue?.toFixed(1)}{suffix}</span>
       <span>{maxValue?.toFixed(1)}{suffix}</span>

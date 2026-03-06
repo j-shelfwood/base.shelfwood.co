@@ -88,7 +88,8 @@ function fmt(n: number | null): string {
     <>
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        class="w-full"
+        class="w-full block"
+        preserveAspectRatio="none"
         style={`height: ${HEIGHT}px`}
         aria-hidden="true"
       >
@@ -115,7 +116,7 @@ function fmt(n: number | null): string {
         )}
       </svg>
       <!-- Legend -->
-      <div class="flex items-center justify-between font-mc text-xs">
+      <div class="flex items-center justify-between font-mc text-sm">
         <div class="flex items-center gap-4">
           <span class="flex items-center gap-1.5">
             <span class="w-3 h-0.5 inline-block" style={`background:${colourA}`} />
