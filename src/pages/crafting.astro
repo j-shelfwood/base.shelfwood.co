@@ -61,14 +61,20 @@ function fmtQty(n: number): string {
   </div>
 
   <!-- Queue depth chart -->
-  <Panel title="QUEUE DEPTH · 1H" raised class="mb-6">
+  <Panel title="TASK QUEUE HISTORY" raised class="mb-6">
+    <div class="flex items-center gap-2 mb-3">
+      <span class="font-mc text-[9px] text-mc-muted">RANGE:</span>
+      <button data-queue-range="-1h"  class="queue-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-gold">1H</button>
+      <button data-queue-range="-6h"  class="queue-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">6H</button>
+      <button data-queue-range="-24h" class="queue-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">24H</button>
+    </div>
     <LineChart
       data={taskHistory}
       colour="var(--color-mc-gold)"
       height={80}
       id="chart-task-queue"
     />
-    <p class="font-mc text-[9px] text-mc-muted mt-1">
+    <p class="font-mc text-[9px] text-mc-muted mt-2">
       Sub-tasks queued across all active crafting jobs
     </p>
   </Panel>
@@ -323,6 +329,21 @@ function fmtQty(n: number): string {
       console.error('crafting refresh error', err);
     }
   }
+
+  // Queue chart range selector
+  document.querySelectorAll('.queue-range-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const range = btn.getAttribute('data-queue-range') ?? '-1h';
+      document.querySelectorAll('.queue-range-btn').forEach(b => {
+        b.className = 'queue-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] ' +
+          (b === btn ? 'text-mc-gold' : 'text-mc-muted');
+      });
+      const data = await fetch(`/api/crafting?range=${range}`).then(r => r.json()).catch(() => null);
+      if (data?.taskHistory) {
+        renderLineChart('chart-task-queue', data.taskHistory, 'var(--color-mc-gold)');
+      }
+    });
+  });
 
   setInterval(refresh, REFRESH_MS);
   refresh();

@@ -528,7 +528,7 @@ const totalChemicals = chemicals.reduce((sum, c) => sum + c.amount, 0);
 
     async function loadHistoryData(range: string) {
       let url = '';
-      if (type === 'item') url = `/api/ae-items?history=${encodeURIComponent(id)}&range=${range}`;
+      if (type === 'item') url = `/api/ae-items?item=${encodeURIComponent(id)}&range=${range}`;
       else if (type === 'fluid') url = `/api/fluids?history=${encodeURIComponent(id)}&range=${range}`;
       else if (type === 'chemical') url = `/api/chemicals?history=${encodeURIComponent(id)}&range=${range}`;
       
@@ -821,6 +821,26 @@ const totalChemicals = chemicals.reduce((sum, c) => sum + c.amount, 0);
     else if (currentTab === 'fluids') loadFluids();
     else if (currentTab === 'chemicals') loadChemicals();
   }, REFRESH_MS);
+
+  // Attach click handlers to SSR-rendered rows (before first client fetch completes)
+  document.querySelectorAll('.item-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const item = row.getAttribute('data-item');
+      if (item) showHistory('item', item, row as HTMLElement, 'diamond');
+    });
+  });
+  document.querySelectorAll('.fluid-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const fluid = row.getAttribute('data-fluid');
+      if (fluid) showHistory('fluid', fluid, row as HTMLElement, 'lapis');
+    });
+  });
+  document.querySelectorAll('.chemical-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const chemical = row.getAttribute('data-chemical');
+      if (chemical) showHistory('chemical', chemical, row as HTMLElement, 'amethyst');
+    });
+  });
 
   // Initial load
   loadItems();

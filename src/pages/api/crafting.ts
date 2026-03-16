@@ -1,13 +1,19 @@
 import type { APIRoute } from 'astro';
 import { craftingJobs, aeCPUs, craftingTaskCount, craftingTaskHistory } from '@/lib/queries';
 
-export const GET: APIRoute = async () => {
+const VALID_RANGE = /^-\d+[smhd]$/;
+
+export const GET: APIRoute = async ({ request }) => {
   try {
+    const url = new URL(request.url);
+    const rawRange = url.searchParams.get('range');
+    const range = rawRange && VALID_RANGE.test(rawRange) ? rawRange : '-1h';
+
     const [jobs, cpus, taskCount, taskHistory] = await Promise.all([
       craftingJobs(),
       aeCPUs(),
       craftingTaskCount(),
-      craftingTaskHistory('-1h'),
+      craftingTaskHistory(range),
     ]);
 
     return Response.json({ jobs, cpus, taskCount, taskHistory });

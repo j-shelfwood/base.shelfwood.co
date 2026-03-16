@@ -104,7 +104,14 @@ function formatMachineType(type: string): string {
   </div>
 
   <!-- Activity history chart -->
-  <Panel title="ACTIVITY · 1H" raised class="mb-6">
+  <Panel title="ACTIVITY HISTORY" raised class="mb-6">
+    <div class="flex items-center gap-2 mb-3">
+      <span class="font-mc text-[9px] text-mc-muted">RANGE:</span>
+      <button data-chart-range="-1h"  class="chart-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-emerald">1H</button>
+      <button data-chart-range="-6h"  class="chart-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">6H</button>
+      <button data-chart-range="-24h" class="chart-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">24H</button>
+      <button data-chart-range="-72h" class="chart-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">3D</button>
+    </div>
     <LineChart
       data={machActivity}
       colour="var(--color-mc-emerald)"
@@ -696,6 +703,22 @@ function formatMachineType(type: string): string {
       console.error('machines refresh error', err);
     }
   }
+
+  // Chart range selector
+  let chartRange = '-1h';
+  document.querySelectorAll('.chart-range-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      chartRange = btn.getAttribute('data-chart-range') ?? '-1h';
+      document.querySelectorAll('.chart-range-btn').forEach(b => {
+        b.className = 'chart-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] ' +
+          (b === btn ? 'text-mc-emerald' : 'text-mc-muted');
+      });
+      const data = await fetch(`/api/machines?range=${chartRange}`).then(r => r.json()).catch(() => null);
+      if (data?.activityHistory) {
+        renderLineChart('chart-machine-activity', data.activityHistory, 'var(--color-mc-emerald)');
+      }
+    });
+  });
 
   setInterval(refresh, REFRESH_MS);
   refresh(); // immediate first update
