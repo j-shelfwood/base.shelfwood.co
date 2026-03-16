@@ -2,19 +2,24 @@
 import Layout from '@/layouts/Layout.astro';
 import Panel from '@/components/mc/Panel.astro';
 import StatCard from '@/components/mc/StatCard.astro';
-import { machineSummary, machineTypes, mekanismMachines, miMachines as fetchMiMachines } from '@/lib/queries';
+import LineChart from '@/components/charts/LineChart.astro';
+import { machineSummary, machineTypes, mekanismMachines, miMachines as fetchMiMachines, machineActivityHistory, miMachineSlotItems } from '@/lib/queries';
 
-const [summaryRes, typesRes, mekanismRes, miRes] = await Promise.allSettled([
+const [summaryRes, typesRes, mekanismRes, miRes, activityRes, slotItemsRes] = await Promise.allSettled([
   machineSummary(),
   machineTypes(),
   mekanismMachines(),
   fetchMiMachines(),
+  machineActivityHistory('-1h'),
+  miMachineSlotItems(),
 ]);
 
 const summary     = summaryRes.status  === 'fulfilled' ? summaryRes.value  : null;
 const types       = typesRes.status    === 'fulfilled' ? typesRes.value    : [];
 const mekMachines = mekanismRes.status === 'fulfilled' ? mekanismRes.value : [];
 const miMachineList = miRes.status     === 'fulfilled' ? miRes.value       : [];
+const machActivity = activityRes.status === 'fulfilled' ? activityRes.value : [];
+const slotItems    = slotItemsRes.status === 'fulfilled' ? slotItemsRes.value : [];
 
 // Group Mekanism machines by type for the grid
 const mekByType = mekMachines.reduce<Record<string, typeof mekMachines>>((acc, m) => {
@@ -97,6 +102,32 @@ function formatMachineType(type: string): string {
     <StatCard label="Active %"  value={summary ? summary.active_percent.toFixed(1) + '%' : '—'}
       colour={summary && summary.active_percent > 50 ? 'emerald' : 'copper'} id="stat-active-pct" />
   </div>
+
+  <!-- Activity history chart -->
+  <Panel title="ACTIVITY · 1H" raised class="mb-6">
+    <LineChart
+      data={machActivity}
+      colour="var(--color-mc-emerald)"
+      height={80}
+      id="chart-machine-activity"
+    />
+  </Panel>
+
+  <!-- Type summary panel -->
+  <Panel title="TYPE SUMMARY" raised noPadding class="mb-6">
+    <div class="divide-y divide-mc-cobble/50">
+      {types.filter(t => t.total_count > 0).map(t => (
+        <div class="px-4 py-2 flex items-center gap-3">
+          <span class="font-mc text-xs text-mc-white w-40 truncate capitalize">{t.type.replace(/_/g, ' ')}</span>
+          <div class="flex-1 h-1.5 bg-mc-shadow">
+            <div class="h-full bg-mc-emerald transition-all" style={`width:${t.active_percent.toFixed(0)}%`} />
+          </div>
+          <span class="font-mc text-xs text-mc-emerald w-12 text-right">{t.active_count}/{t.total_count}</span>
+          <span class="font-mc text-xs text-mc-muted w-12 text-right">{t.active_percent.toFixed(0)}%</span>
+        </div>
+      ))}
+    </div>
+  </Panel>
 
   <!-- ── Mekanism grid ─────────────────────────────────────────────────────── -->
   <Panel title="MEKANISM MACHINES" raised noPadding class="mb-6">
@@ -287,6 +318,33 @@ function formatMachineType(type: string): string {
   function setEl(id: string, val: string) {
     const el = document.getElementById(id);
     if (el) el.textContent = val;
+  }
+
+  // Global slot items map
+  type SlotItem = { name: string; item: string; count: number };
+  let slotItemMap = new Map<string, SlotItem[]>();
+
+  function renderLineChart(containerId: string, points: {time: string; value: number}[], colour: string) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (points.length < 2) return;
+    const W = container.clientWidth || 600;
+    const H = 80;
+    const pad = 4;
+    const min = Math.min(...points.map(p => p.value));
+    const max = Math.max(...points.map(p => p.value));
+    const range = max - min || 1;
+    const xs = points.map((_, i) => pad + (i / (points.length - 1)) * (W - pad * 2));
+    const ys = points.map(p => H - pad - ((p.value - min) / range) * (H - pad * 2));
+    const d = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i]!.toFixed(1)}`).join(' ');
+    const fillD = `${d} L${xs[xs.length-1]!.toFixed(1)},${H} L${xs[0]!.toFixed(1)},${H} Z`;
+    const existing = container.querySelector('svg');
+    const svgHtml = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <path d="${fillD}" fill="${colour}" opacity="0.15"/>
+      <path d="${d}" fill="none" stroke="${colour}" stroke-width="1.5" opacity="0.9"/>
+    </svg>`;
+    if (existing) existing.outerHTML = svgHtml;
+    else container.innerHTML = svgHtml;
   }
 
   const COLOURS: Record<string, string> = {
@@ -559,6 +617,16 @@ function formatMachineType(type: string): string {
            <span class="font-mc text-[8px] text-mc-diamond">${m.occupied_slots}/${m.total_slots}</span>
          </div>`
       : '';
+    
+    // Add slot item details
+    const machineSlots = slotItemMap.get(m.name) ?? [];
+    const slotDetail = machineSlots.slice(0, 3).map(s =>
+      `<div class="flex items-center justify-between gap-2">
+         <span class="font-mc text-[8px] text-mc-white capitalize">${s.item.replace(/^.*:/, '').replace(/_/g, ' ')}</span>
+         <span class="font-mc text-[8px] text-mc-diamond">×${s.count}</span>
+       </div>`
+    ).join('');
+    
     return `
       ${m.active ? `<div class="absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none"></div>` : ''}
       <span class="font-mc text-[8px] leading-none z-10 px-0.5 text-center w-full truncate ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">${shortName}</span>
@@ -571,6 +639,7 @@ function formatMachineType(type: string): string {
         <span class="font-mc text-[9px] ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
         ${energyRow}
         ${slotsInfo}
+        ${slotDetail ? `<div class="border-t border-mc-cobble/50 my-0.5"></div>${slotDetail}` : ''}
       </div>`;
   }
 
@@ -598,6 +667,15 @@ function formatMachineType(type: string): string {
       const data = await fetch('/api/machines').then(r => r.json());
       if (data.error) return;
 
+      // Update slot items map
+      if (data.slotItems) {
+        slotItemMap.clear();
+        for (const item of data.slotItems) {
+          if (!slotItemMap.has(item.name)) slotItemMap.set(item.name, []);
+          slotItemMap.get(item.name)!.push(item);
+        }
+      }
+
       if (data.summary) {
         const s = data.summary;
         setEl('stat-active', String(s.active_machines));
@@ -606,6 +684,11 @@ function formatMachineType(type: string): string {
       }
       if (data.mekanism) renderMekGrid(data.mekanism);
       if (data.mi)       renderMIGrid(data.mi);
+      
+      // Update activity chart
+      if (data.activityHistory) {
+        renderLineChart('chart-machine-activity', data.activityHistory, 'var(--color-mc-emerald)');
+      }
 
       const lu = document.getElementById('last-updated');
       if (lu) lu.textContent = `UPDATED ${new Date().toLocaleTimeString()}`;

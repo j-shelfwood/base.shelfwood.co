@@ -3,15 +3,20 @@ import Layout from '@/layouts/Layout.astro';
 import Panel from '@/components/mc/Panel.astro';
 import StatCard from '@/components/mc/StatCard.astro';
 import ProgressBar from '@/components/mc/ProgressBar.astro';
-import { craftingJobs, aeCPUs } from '@/lib/queries';
+import LineChart from '@/components/charts/LineChart.astro';
+import { craftingJobs, aeCPUs, craftingTaskCount, craftingTaskHistory } from '@/lib/queries';
 
-const [jobsRes, cpusRes] = await Promise.allSettled([
+const [jobsRes, cpusRes, taskCountRes, taskHistoryRes] = await Promise.allSettled([
   craftingJobs(),
   aeCPUs(),
+  craftingTaskCount(),
+  craftingTaskHistory('-1h'),
 ]);
 
 const jobs = jobsRes.status === 'fulfilled' ? jobsRes.value : [];
 const cpus = cpusRes.status === 'fulfilled' ? cpusRes.value : { total: 0, busy: 0, busy_percent: 0, cpus: [] };
+const taskCount = taskCountRes.status === 'fulfilled' ? taskCountRes.value : 0;
+const taskHistory = taskHistoryRes.status === 'fulfilled' ? taskHistoryRes.value : [];
 
 // Merge job data into CPUs by cpu_index
 const jobByCpuIndex = new Map(jobs.map(j => [j.cpu_index, j]));
@@ -47,12 +52,26 @@ function fmtQty(n: number): string {
   </div>
 
   <!-- Stats row -->
-  <div class="grid grid-cols-3 gap-3 mb-6">
+  <div class="grid grid-cols-4 gap-3 mb-6">
     <StatCard label="CPUs Busy"  value={`${cpus.busy}/${cpus.total}`}  colour="amethyst" id="stat-cpus" />
     <StatCard label="Active Jobs" value={jobs.length}                   colour="amethyst" id="stat-jobs" />
     <StatCard label="CPUs Free"  value={cpus.total - cpus.busy}
       colour={cpus.total - cpus.busy > 0 ? 'emerald' : 'redstone'} id="stat-free" />
+    <StatCard label="Task Queue" value={taskCount}                       colour="gold"     id="stat-tasks" />
   </div>
+
+  <!-- Queue depth chart -->
+  <Panel title="QUEUE DEPTH · 1H" raised class="mb-6">
+    <LineChart
+      data={taskHistory}
+      colour="var(--color-mc-gold)"
+      height={80}
+      id="chart-task-queue"
+    />
+    <p class="font-mc text-[9px] text-mc-muted mt-1">
+      Sub-tasks queued across all active crafting jobs
+    </p>
+  </Panel>
 
   <!-- Full-width CPU grid -->
   <Panel title="CPU GRID" raised>
@@ -174,6 +193,29 @@ function fmtQty(n: number): string {
     if (el) el.textContent = val;
   }
 
+  function renderLineChart(containerId: string, points: {time: string; value: number}[], colour: string) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (points.length < 2) return;
+    const W = container.clientWidth || 600;
+    const H = 80;
+    const pad = 4;
+    const min = Math.min(...points.map(p => p.value));
+    const max = Math.max(...points.map(p => p.value));
+    const range = max - min || 1;
+    const xs = points.map((_, i) => pad + (i / (points.length - 1)) * (W - pad * 2));
+    const ys = points.map(p => H - pad - ((p.value - min) / range) * (H - pad * 2));
+    const d = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i]!.toFixed(1)}`).join(' ');
+    const fillD = `${d} L${xs[xs.length-1]!.toFixed(1)},${H} L${xs[0]!.toFixed(1)},${H} Z`;
+    const existing = container.querySelector('svg');
+    const svgHtml = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <path d="${fillD}" fill="${colour}" opacity="0.15"/>
+      <path d="${d}" fill="none" stroke="${colour}" stroke-width="1.5" opacity="0.9"/>
+    </svg>`;
+    if (existing) existing.outerHTML = svgHtml;
+    else container.innerHTML = svgHtml;
+  }
+
   function buildCpuCell(cpu: CPU, job: Job | null): string {
     const num = cpu.name.replace(/[^0-9]/g, '') || cpu.name.slice(-2);
     const coproPct = Math.min(100, cpu.coProcessors * 10);
@@ -217,10 +259,11 @@ function fmtQty(n: number): string {
       </div>`;
   }
 
-  function renderCPUs(data: { total: number; busy: number; busy_percent: number; cpus: CPU[] }, jobs: Job[]) {
+  function renderCPUs(data: { total: number; busy: number; busy_percent: number; cpus: CPU[] }, jobs: Job[], taskCount?: number) {
     setEl('stat-cpus', `${data.busy}/${data.total}`);
     setEl('stat-jobs', String(jobs.filter(j => j).length));
     setEl('stat-free', String(data.total - data.busy));
+    if (taskCount !== undefined) setEl('stat-tasks', String(taskCount));
 
     const fill = document.getElementById('progress-cpu') as HTMLElement | null;
     if (fill) fill.style.width = `${data.busy_percent.toFixed(1)}%`;
@@ -267,7 +310,13 @@ function fmtQty(n: number): string {
     try {
       const data = await fetch('/api/crafting').then(r => r.json());
       if (data.error) return;
-      if (data.cpus) renderCPUs(data.cpus, data.jobs ?? []);
+      if (data.cpus) renderCPUs(data.cpus, data.jobs ?? [], data.taskCount);
+      
+      // Update task queue chart
+      if (data.taskHistory) {
+        renderLineChart('chart-task-queue', data.taskHistory, 'var(--color-mc-gold)');
+      }
+      
       const el = document.getElementById('last-updated');
       if (el) el.textContent = `UPDATED ${new Date().toLocaleTimeString()}`;
     } catch (err) {

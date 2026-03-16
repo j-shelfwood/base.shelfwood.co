@@ -3,17 +3,25 @@ import Layout from '@/layouts/Layout.astro';
 import Panel from '@/components/mc/Panel.astro';
 import StatCard from '@/components/mc/StatCard.astro';
 import ProgressBar from '@/components/mc/ProgressBar.astro';
-import { aeSummary, aeItems, aeItemVelocity } from '@/lib/queries';
+import { aeSummary, aeItems, aeItemVelocity, aeFluids, aeFluidVelocity, aeChemicals, aeChemicalVelocity } from '@/lib/queries';
 
-const [summaryRes, itemsRes, velocityRes] = await Promise.allSettled([
+const [summaryRes, itemsRes, velocityRes, fluidRes, fluidVelRes, chemRes, chemVelRes] = await Promise.allSettled([
   aeSummary(),
   aeItems(),
   aeItemVelocity('-30m', 15),
+  aeFluids(),
+  aeFluidVelocity('-30m', 15),
+  aeChemicals(),
+  aeChemicalVelocity('-30m', 15),
 ]);
 
 const summary  = summaryRes.status  === 'fulfilled' ? summaryRes.value  : null;
 const items    = itemsRes.status    === 'fulfilled' ? itemsRes.value    : [];
 const velocity = velocityRes.status === 'fulfilled' ? velocityRes.value : [];
+const fluids = fluidRes.status === 'fulfilled' ? fluidRes.value : [];
+const fluidVelocity = fluidVelRes.status === 'fulfilled' ? fluidVelRes.value : [];
+const chemicals = chemRes.status === 'fulfilled' ? chemRes.value : [];
+const chemVelocity = chemVelRes.status === 'fulfilled' ? chemVelRes.value : [];
 
 function fmt(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
@@ -26,13 +34,22 @@ function itemLabel(registryName: string): string {
     .replace(/^.*:/, '')
     .replace(/_/g, ' ');
 }
+
+function fmtMb(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M mB';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K mB';
+  return n.toLocaleString() + ' mB';
+}
+
+const totalFluids = fluids.reduce((sum, f) => sum + f.amount, 0);
+const totalChemicals = chemicals.reduce((sum, c) => sum + c.amount, 0);
 ---
 
 <Layout title="MC Base — Storage">
   <div class="mb-6 flex items-end justify-between gap-4 flex-wrap">
     <div>
       <h1 class="font-mc text-mc-white text-xl">STORAGE</h1>
-      <p class="font-mc text-xs text-mc-muted mt-1">AE2 ITEM BROWSER</p>
+      <p class="font-mc text-xs text-mc-muted mt-1">AE2 BROWSER</p>
     </div>
     <div class="flex items-center gap-3">
       <!-- Sort controls -->
@@ -53,6 +70,16 @@ function itemLabel(registryName: string): string {
       </div>
     </div>
   </div>
+
+  <!-- Tabs -->
+  <div class="flex gap-1 mb-6" id="storage-tabs">
+    <button data-tab="items" class="tab-btn mc-slot px-4 py-2 font-mc text-xs text-mc-diamond">ITEMS</button>
+    <button data-tab="fluids" class="tab-btn mc-slot px-4 py-2 font-mc text-xs text-mc-muted">FLUIDS</button>
+    <button data-tab="chemicals" class="tab-btn mc-slot px-4 py-2 font-mc text-xs text-mc-muted">CHEMICALS</button>
+  </div>
+
+  <!-- Tab: Items -->
+  <div id="tab-items">
 
   <!-- Storage stats -->
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
@@ -173,6 +200,181 @@ function itemLabel(registryName: string): string {
       )}
     </div>
   </Panel>
+  </div>
+
+  <!-- Tab: Fluids -->
+  <div id="tab-fluids" class="hidden">
+    <!-- Fluid stats -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <StatCard label="Total Fluids" value={fmtMb(totalFluids)} colour="lapis" id="stat-total-fluids" />
+      <StatCard label="Unique Types" value={fluids.length} colour="lapis" id="stat-unique-fluids" />
+    </div>
+
+    <!-- Fluid velocity panels -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+      <div data-panel="fluid-producers">
+        <Panel title="TOP PRODUCERS · 30m" raised noPadding>
+          <div class="divide-y divide-mc-cobble/50">
+            {(() => {
+              const producers = fluidVelocity.filter(v => v.delta > 0);
+              const max = producers[0]?.delta ?? 1;
+              return producers.length > 0
+                ? producers.slice(0, 8).map(v => {
+                    const pct = Math.min(100, (v.delta / max) * 100);
+                    return (
+                      <div class="px-4 py-2 flex flex-col gap-1">
+                        <div class="flex items-center justify-between">
+                          <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(v.item)}</span>
+                          <span class="font-mc text-xs text-mc-emerald">+{fmtMb(v.delta)}</span>
+                        </div>
+                        <div class="mc-progress-track">
+                          <div class="mc-progress-fill" style={`width:${pct}%;background-color:var(--color-mc-emerald);opacity:0.6`} />
+                        </div>
+                      </div>
+                    );
+                  })
+                : <p class="font-mc text-xs text-mc-muted px-4 py-4">No production detected</p>;
+            })()}
+          </div>
+        </Panel>
+      </div>
+
+      <div data-panel="fluid-consumers">
+        <Panel title="TOP CONSUMERS · 30m" raised noPadding>
+          <div class="divide-y divide-mc-cobble/50">
+            {(() => {
+              const consumers = fluidVelocity.filter(v => v.delta < 0);
+              const max = Math.abs(consumers[0]?.delta ?? 1);
+              return consumers.length > 0
+                ? consumers.slice(0, 8).map(v => {
+                    const pct = Math.min(100, (Math.abs(v.delta) / max) * 100);
+                    return (
+                      <div class="px-4 py-2 flex flex-col gap-1">
+                        <div class="flex items-center justify-between">
+                          <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(v.item)}</span>
+                          <span class="font-mc text-xs text-mc-redstone">{fmtMb(v.delta)}</span>
+                        </div>
+                        <div class="mc-progress-track">
+                          <div class="mc-progress-fill" style={`width:${pct}%;background-color:var(--color-mc-redstone);opacity:0.6`} />
+                        </div>
+                      </div>
+                    );
+                  })
+                : <p class="font-mc text-xs text-mc-muted px-4 py-4">No consumption detected</p>;
+            })()}
+          </div>
+        </Panel>
+      </div>
+    </div>
+
+    <!-- Fluid list -->
+    <Panel title="FLUIDS" raised noPadding>
+      <div id="fluid-list" class="divide-y divide-mc-cobble/50">
+        {fluids.map(fluid => (
+          <div
+            class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors cursor-pointer fluid-row"
+            data-fluid={fluid.fluid}
+          >
+            <div class="flex flex-col gap-0.5">
+              <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(fluid.fluid)}</span>
+              <span class="font-mc text-xs text-mc-muted">{fluid.fluid}</span>
+            </div>
+            <span class="font-mc text-sm text-mc-lapis shrink-0">{fmtMb(fluid.amount)}</span>
+          </div>
+        ))}
+        {fluids.length === 0 && (
+          <p class="font-mc text-xs text-mc-muted px-4 py-6">No fluids found</p>
+        )}
+      </div>
+    </Panel>
+  </div>
+
+  <!-- Tab: Chemicals -->
+  <div id="tab-chemicals" class="hidden">
+    <!-- Chemical stats -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <StatCard label="Total Chemicals" value={fmtMb(totalChemicals)} colour="amethyst" id="stat-total-chemicals" />
+      <StatCard label="Unique Types" value={chemicals.length} colour="amethyst" id="stat-unique-chemicals" />
+    </div>
+
+    <!-- Chemical velocity panels -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+      <div data-panel="chemical-producers">
+        <Panel title="TOP PRODUCERS · 30m" raised noPadding>
+          <div class="divide-y divide-mc-cobble/50">
+            {(() => {
+              const producers = chemVelocity.filter(v => v.delta > 0);
+              const max = producers[0]?.delta ?? 1;
+              return producers.length > 0
+                ? producers.slice(0, 8).map(v => {
+                    const pct = Math.min(100, (v.delta / max) * 100);
+                    return (
+                      <div class="px-4 py-2 flex flex-col gap-1">
+                        <div class="flex items-center justify-between">
+                          <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(v.item)}</span>
+                          <span class="font-mc text-xs text-mc-emerald">+{fmtMb(v.delta)}</span>
+                        </div>
+                        <div class="mc-progress-track">
+                          <div class="mc-progress-fill" style={`width:${pct}%;background-color:var(--color-mc-emerald);opacity:0.6`} />
+                        </div>
+                      </div>
+                    );
+                  })
+                : <p class="font-mc text-xs text-mc-muted px-4 py-4">No production detected</p>;
+            })()}
+          </div>
+        </Panel>
+      </div>
+
+      <div data-panel="chemical-consumers">
+        <Panel title="TOP CONSUMERS · 30m" raised noPadding>
+          <div class="divide-y divide-mc-cobble/50">
+            {(() => {
+              const consumers = chemVelocity.filter(v => v.delta < 0);
+              const max = Math.abs(consumers[0]?.delta ?? 1);
+              return consumers.length > 0
+                ? consumers.slice(0, 8).map(v => {
+                    const pct = Math.min(100, (Math.abs(v.delta) / max) * 100);
+                    return (
+                      <div class="px-4 py-2 flex flex-col gap-1">
+                        <div class="flex items-center justify-between">
+                          <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(v.item)}</span>
+                          <span class="font-mc text-xs text-mc-redstone">{fmtMb(v.delta)}</span>
+                        </div>
+                        <div class="mc-progress-track">
+                          <div class="mc-progress-fill" style={`width:${pct}%;background-color:var(--color-mc-redstone);opacity:0.6`} />
+                        </div>
+                      </div>
+                    );
+                  })
+                : <p class="font-mc text-xs text-mc-muted px-4 py-4">No consumption detected</p>;
+            })()}
+          </div>
+        </Panel>
+      </div>
+    </div>
+
+    <!-- Chemical list -->
+    <Panel title="CHEMICALS" raised noPadding>
+      <div id="chemical-list" class="divide-y divide-mc-cobble/50">
+        {chemicals.map(chemical => (
+          <div
+            class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors cursor-pointer chemical-row"
+            data-chemical={chemical.chemical}
+          >
+            <div class="flex flex-col gap-0.5">
+              <span class="font-mc text-xs text-mc-white capitalize">{itemLabel(chemical.chemical)}</span>
+              <span class="font-mc text-xs text-mc-muted">{chemical.chemical}</span>
+            </div>
+            <span class="font-mc text-sm text-mc-amethyst shrink-0">{fmtMb(chemical.amount)}</span>
+          </div>
+        ))}
+        {chemicals.length === 0 && (
+          <p class="font-mc text-xs text-mc-muted px-4 py-6">No chemicals found</p>
+        )}
+      </div>
+    </Panel>
+  </div>
 </Layout>
 
 <script>
@@ -181,6 +383,9 @@ function itemLabel(registryName: string): string {
   let sortMode: 'count' | 'name' = 'count';
   let sortDir: 'desc' | 'asc' = 'desc';
   let allItems: { item: string; count: number }[] = [];
+  let allFluids: { fluid: string; amount: number }[] = [];
+  let allChemicals: { chemical: string; amount: number }[] = [];
+  let currentTab: 'items' | 'fluids' | 'chemicals' = 'items';
 
   function itemLabel(name: string): string {
     return name.replace(/^.*:/, '').replace(/_/g, ' ');
@@ -192,6 +397,35 @@ function itemLabel(registryName: string): string {
     return n.toLocaleString();
   }
 
+  function fmtMb(n: number): string {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M mB';
+    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K mB';
+    return n.toLocaleString() + ' mB';
+  }
+
+  // Tab switching
+  function switchTab(tab: 'items' | 'fluids' | 'chemicals') {
+    currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      if (btn.getAttribute('data-tab') === tab) {
+        btn.className = 'tab-btn mc-slot px-4 py-2 font-mc text-xs text-mc-diamond';
+      } else {
+        btn.className = 'tab-btn mc-slot px-4 py-2 font-mc text-xs text-mc-muted';
+      }
+    });
+    document.getElementById('tab-items')?.classList.toggle('hidden', tab !== 'items');
+    document.getElementById('tab-fluids')?.classList.toggle('hidden', tab !== 'fluids');
+    document.getElementById('tab-chemicals')?.classList.toggle('hidden', tab !== 'chemicals');
+    document.querySelectorAll('.history-panel').forEach(el => el.remove());
+  }
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.getAttribute('data-tab') as 'items' | 'fluids' | 'chemicals';
+      if (tab) switchTab(tab);
+    });
+  });
+
   function sortItems(items: { item: string; count: number }[]) {
     const copy = [...items];
     if (sortMode === 'name') {
@@ -201,6 +435,32 @@ function itemLabel(registryName: string): string {
       });
     } else {
       copy.sort((a, b) => sortDir === 'desc' ? b.count - a.count : a.count - b.count);
+    }
+    return copy;
+  }
+
+  function sortFluids(fluids: { fluid: string; amount: number }[]) {
+    const copy = [...fluids];
+    if (sortMode === 'name') {
+      copy.sort((a, b) => {
+        const cmp = itemLabel(a.fluid).localeCompare(itemLabel(b.fluid));
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+    } else {
+      copy.sort((a, b) => sortDir === 'desc' ? b.amount - a.amount : a.amount - b.amount);
+    }
+    return copy;
+  }
+
+  function sortChemicals(chemicals: { chemical: string; amount: number }[]) {
+    const copy = [...chemicals];
+    if (sortMode === 'name') {
+      copy.sort((a, b) => {
+        const cmp = itemLabel(a.chemical).localeCompare(itemLabel(b.chemical));
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+    } else {
+      copy.sort((a, b) => sortDir === 'desc' ? b.amount - a.amount : a.amount - b.amount);
     }
     return copy;
   }
@@ -220,6 +480,78 @@ function itemLabel(registryName: string): string {
     }
   }
 
+  function renderSparkline(container: HTMLElement, points: {time: string; value: number}[], colour: string) {
+    if (points.length < 2) {
+      container.innerHTML = '<p class="font-mc text-[9px] text-mc-muted">Not enough data</p>';
+      return;
+    }
+    const W = container.clientWidth || 400;
+    const H = container.clientHeight || 96;
+    const pad = 4;
+    const min = Math.min(...points.map(p => p.value));
+    const max = Math.max(...points.map(p => p.value));
+    const range = max - min || 1;
+    const xs = points.map((_, i) => pad + (i / (points.length - 1)) * (W - pad * 2));
+    const ys = points.map(p => H - pad - ((p.value - min) / range) * (H - pad * 2));
+    const d = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i]!.toFixed(1)}`).join(' ');
+    const fillD = `${d} L${xs[xs.length-1]!.toFixed(1)},${H} L${xs[0]!.toFixed(1)},${H} Z`;
+    const colourVar = `var(--color-mc-${colour})`;
+    container.innerHTML = `
+      <svg width="100%" height="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+        <path d="${fillD}" fill="${colourVar}" opacity="0.15"/>
+        <path d="${d}" fill="none" stroke="${colourVar}" stroke-width="1.5" opacity="0.9"/>
+      </svg>`;
+  }
+
+  async function showHistory(type: 'item' | 'fluid' | 'chemical', id: string, row: HTMLElement, colour: string) {
+    const existing = row.nextElementSibling;
+    if (existing?.classList.contains('history-panel')) {
+      existing.remove();
+      return;
+    }
+
+    document.querySelectorAll('.history-panel').forEach(el => el.remove());
+
+    const panel = document.createElement('div');
+    panel.className = 'history-panel px-4 py-3 bg-mc-obsidian/50 border-t border-mc-cobble/30';
+    panel.innerHTML = `
+      <div class="flex items-center gap-2 mb-2">
+        <span class="font-mc text-[9px] text-mc-muted">RANGE:</span>
+        <button data-range="-1h" class="range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-diamond">1H</button>
+        <button data-range="-6h" class="range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">6H</button>
+        <button data-range="-24h" class="range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">24H</button>
+        <span class="font-mc text-[9px] text-mc-muted ml-auto history-label">Loading...</span>
+      </div>
+      <div class="history-chart-container h-24 w-full"></div>`;
+    
+    row.after(panel);
+
+    async function loadHistoryData(range: string) {
+      let url = '';
+      if (type === 'item') url = `/api/ae-items?history=${encodeURIComponent(id)}&range=${range}`;
+      else if (type === 'fluid') url = `/api/fluids?history=${encodeURIComponent(id)}&range=${range}`;
+      else if (type === 'chemical') url = `/api/chemicals?history=${encodeURIComponent(id)}&range=${range}`;
+      
+      const data = await fetch(url).then(r => r.json()).catch(() => ({ history: [] }));
+      const container = panel.querySelector('.history-chart-container') as HTMLElement;
+      const label = panel.querySelector('.history-label') as HTMLElement;
+      if (container) renderSparkline(container, data.history || [], colour);
+      if (label) label.textContent = itemLabel(id);
+    }
+
+    panel.querySelectorAll('.range-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        panel.querySelectorAll('.range-btn').forEach(b => {
+          b.className = 'range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted';
+        });
+        btn.className = 'range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-diamond';
+        await loadHistoryData(btn.getAttribute('data-range') || '-1h');
+      });
+    });
+
+    await loadHistoryData('-1h');
+  }
+
   function renderItems(items: { item: string; count: number }[]) {
     const list = document.getElementById('item-list');
     if (!list) return;
@@ -235,6 +567,61 @@ function itemLabel(registryName: string): string {
           <span class="font-mc text-sm text-mc-diamond">${fmt(i.count)}</span>
         </div>
       `).join('');
+    
+    list.querySelectorAll('.item-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const item = row.getAttribute('data-item');
+        if (item) showHistory('item', item, row as HTMLElement, 'diamond');
+      });
+    });
+  }
+
+  function renderFluids(fluids: { fluid: string; amount: number }[]) {
+    const list = document.getElementById('fluid-list');
+    if (!list) return;
+    const sorted = sortFluids(fluids);
+    list.innerHTML = sorted.length === 0
+      ? '<p class="font-mc text-xs text-mc-muted px-4 py-6">No fluids found</p>'
+      : sorted.map(f => `
+        <div class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors cursor-pointer fluid-row" data-fluid="${f.fluid}">
+          <div class="flex flex-col gap-0.5">
+            <span class="font-mc text-xs text-mc-white capitalize">${itemLabel(f.fluid)}</span>
+            <span class="font-mc text-xs text-mc-muted">${f.fluid}</span>
+          </div>
+          <span class="font-mc text-sm text-mc-lapis">${fmtMb(f.amount)}</span>
+        </div>
+      `).join('');
+    
+    list.querySelectorAll('.fluid-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const fluid = row.getAttribute('data-fluid');
+        if (fluid) showHistory('fluid', fluid, row as HTMLElement, 'lapis');
+      });
+    });
+  }
+
+  function renderChemicals(chemicals: { chemical: string; amount: number }[]) {
+    const list = document.getElementById('chemical-list');
+    if (!list) return;
+    const sorted = sortChemicals(chemicals);
+    list.innerHTML = sorted.length === 0
+      ? '<p class="font-mc text-xs text-mc-muted px-4 py-6">No chemicals found</p>'
+      : sorted.map(c => `
+        <div class="flex items-center justify-between px-4 py-2 hover:bg-mc-stone/20 transition-colors cursor-pointer chemical-row" data-chemical="${c.chemical}">
+          <div class="flex flex-col gap-0.5">
+            <span class="font-mc text-xs text-mc-white capitalize">${itemLabel(c.chemical)}</span>
+            <span class="font-mc text-xs text-mc-muted">${c.chemical}</span>
+          </div>
+          <span class="font-mc text-sm text-mc-amethyst">${fmtMb(c.amount)}</span>
+        </div>
+      `).join('');
+    
+    list.querySelectorAll('.chemical-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const chemical = row.getAttribute('data-chemical');
+        if (chemical) showHistory('chemical', chemical, row as HTMLElement, 'amethyst');
+      });
+    });
   }
 
   async function loadItems(q?: string) {
@@ -243,6 +630,22 @@ function itemLabel(registryName: string): string {
     if (data.items) {
       allItems = data.items;
       renderItems(allItems);
+    }
+  }
+
+  async function loadFluids() {
+    const data = await fetch('/api/fluids').then(r => r.json()).catch(() => ({ fluids: [] }));
+    if (data.fluids) {
+      allFluids = data.fluids;
+      renderFluids(allFluids);
+    }
+  }
+
+  async function loadChemicals() {
+    const data = await fetch('/api/chemicals').then(r => r.json()).catch(() => ({ chemicals: [] }));
+    if (data.chemicals) {
+      allChemicals = data.chemicals;
+      renderChemicals(allChemicals);
     }
   }
 
@@ -255,7 +658,9 @@ function itemLabel(registryName: string): string {
       sortDir = 'desc';
     }
     updateSortButtons();
-    renderItems(allItems);
+    if (currentTab === 'items') renderItems(allItems);
+    else if (currentTab === 'fluids') renderFluids(allFluids);
+    else if (currentTab === 'chemicals') renderChemicals(allChemicals);
   });
   document.getElementById('sort-name')?.addEventListener('click', () => {
     if (sortMode === 'name') {
@@ -265,7 +670,9 @@ function itemLabel(registryName: string): string {
       sortDir = 'asc';
     }
     updateSortButtons();
-    renderItems(allItems);
+    if (currentTab === 'items') renderItems(allItems);
+    else if (currentTab === 'fluids') renderFluids(allFluids);
+    else if (currentTab === 'chemicals') renderChemicals(allChemicals);
   });
 
   // Search debounce
@@ -289,6 +696,48 @@ function itemLabel(registryName: string): string {
       items: { item: string; delta: number }[],
       sign: 1 | -1,
       colour: string,
+      emptyMsg: string,
+      formatter: (n: number) => string
+    ) {
+      const panel = document.querySelector(selector) as HTMLElement | null;
+      if (!panel) return;
+      const container = panel.querySelector('.divide-y') as HTMLElement | null;
+      if (!container) return;
+      const filtered = items.filter(v => Math.sign(v.delta) === sign);
+      if (filtered.length === 0) {
+        container.innerHTML = `<p class="font-mc text-xs text-mc-muted px-4 py-4">${emptyMsg}</p>`;
+        return;
+      }
+      const max = Math.abs(filtered[0]?.delta ?? 1);
+      container.innerHTML = filtered.slice(0, 8).map(v => {
+        const pct = Math.min(100, (Math.abs(v.delta) / max) * 100);
+        const label = v.item.replace(/^.*:/, '').replace(/_/g, ' ');
+        const fmtDelta = sign === 1 ? `+${formatter(v.delta)}` : formatter(v.delta);
+        return `<div class="px-4 py-2 flex flex-col gap-1">
+          <div class="flex items-center justify-between">
+            <span class="font-mc text-xs text-mc-white capitalize">${label}</span>
+            <span class="font-mc text-xs ${colour}">${fmtDelta}</span>
+          </div>
+          <div class="mc-progress-track">
+            <div class="mc-progress-fill" style="width:${pct}%;background-color:${colour === 'text-mc-emerald' ? 'var(--color-mc-emerald)' : 'var(--color-mc-redstone)'};opacity:0.6"></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    renderVelocity('[data-panel="producers"]', data.velocity, 1,  'text-mc-emerald', 'No production detected', fmt);
+    renderVelocity('[data-panel="consumers"]', data.velocity, -1, 'text-mc-redstone', 'No consumption detected', fmt);
+  }
+
+  async function loadFluidVelocity() {
+    const data = await fetch('/api/fluids?velocity=1').then(r => r.json()).catch(() => null);
+    if (!data?.velocity) return;
+
+    function renderVelocity(
+      selector: string,
+      items: { item: string; delta: number }[],
+      sign: 1 | -1,
+      colour: string,
       emptyMsg: string
     ) {
       const panel = document.querySelector(selector) as HTMLElement | null;
@@ -304,7 +753,7 @@ function itemLabel(registryName: string): string {
       container.innerHTML = filtered.slice(0, 8).map(v => {
         const pct = Math.min(100, (Math.abs(v.delta) / max) * 100);
         const label = v.item.replace(/^.*:/, '').replace(/_/g, ' ');
-        const fmtDelta = sign === 1 ? `+${fmt(v.delta)}` : fmt(v.delta);
+        const fmtDelta = sign === 1 ? `+${fmtMb(v.delta)}` : fmtMb(v.delta);
         return `<div class="px-4 py-2 flex flex-col gap-1">
           <div class="flex items-center justify-between">
             <span class="font-mc text-xs text-mc-white capitalize">${label}</span>
@@ -317,18 +766,67 @@ function itemLabel(registryName: string): string {
       }).join('');
     }
 
-    renderVelocity('[data-panel="producers"]', data.velocity, 1,  'text-mc-emerald', 'No production detected');
-    renderVelocity('[data-panel="consumers"]', data.velocity, -1, 'text-mc-redstone', 'No consumption detected');
+    renderVelocity('[data-panel="fluid-producers"]', data.velocity, 1,  'text-mc-emerald', 'No production detected');
+    renderVelocity('[data-panel="fluid-consumers"]', data.velocity, -1, 'text-mc-redstone', 'No consumption detected');
+  }
+
+  async function loadChemicalVelocity() {
+    const data = await fetch('/api/chemicals?velocity=1').then(r => r.json()).catch(() => null);
+    if (!data?.velocity) return;
+
+    function renderVelocity(
+      selector: string,
+      items: { item: string; delta: number }[],
+      sign: 1 | -1,
+      colour: string,
+      emptyMsg: string
+    ) {
+      const panel = document.querySelector(selector) as HTMLElement | null;
+      if (!panel) return;
+      const container = panel.querySelector('.divide-y') as HTMLElement | null;
+      if (!container) return;
+      const filtered = items.filter(v => Math.sign(v.delta) === sign);
+      if (filtered.length === 0) {
+        container.innerHTML = `<p class="font-mc text-xs text-mc-muted px-4 py-4">${emptyMsg}</p>`;
+        return;
+      }
+      const max = Math.abs(filtered[0]?.delta ?? 1);
+      container.innerHTML = filtered.slice(0, 8).map(v => {
+        const pct = Math.min(100, (Math.abs(v.delta) / max) * 100);
+        const label = v.item.replace(/^.*:/, '').replace(/_/g, ' ');
+        const fmtDelta = sign === 1 ? `+${fmtMb(v.delta)}` : fmtMb(v.delta);
+        return `<div class="px-4 py-2 flex flex-col gap-1">
+          <div class="flex items-center justify-between">
+            <span class="font-mc text-xs text-mc-white capitalize">${label}</span>
+            <span class="font-mc text-xs ${colour}">${fmtDelta}</span>
+          </div>
+          <div class="mc-progress-track">
+            <div class="mc-progress-fill" style="width:${pct}%;background-color:${colour === 'text-mc-emerald' ? 'var(--color-mc-emerald)' : 'var(--color-mc-redstone)'};opacity:0.6"></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    renderVelocity('[data-panel="chemical-producers"]', data.velocity, 1,  'text-mc-emerald', 'No production detected');
+    renderVelocity('[data-panel="chemical-consumers"]', data.velocity, -1, 'text-mc-redstone', 'No consumption detected');
   }
 
   setInterval(loadVelocity, 120_000);
+  setInterval(loadFluidVelocity, 120_000);
+  setInterval(loadChemicalVelocity, 120_000);
 
-  // Auto-refresh items
-  setInterval(() => loadItems(currentQuery || undefined), REFRESH_MS);
+  // Auto-refresh
+  setInterval(() => {
+    if (currentTab === 'items') loadItems(currentQuery || undefined);
+    else if (currentTab === 'fluids') loadFluids();
+    else if (currentTab === 'chemicals') loadChemicals();
+  }, REFRESH_MS);
 
-  // Populate allItems immediately (SSR renders the list but allItems starts empty,
-  // so sort/filter would produce nothing until the first 60s tick)
+  // Initial load
   loadItems();
-  // Refresh velocity immediately (interval is 2min, too long to wait on load)
   loadVelocity();
+  loadFluids();
+  loadChemicals();
+  loadFluidVelocity();
+  loadChemicalVelocity();
 </script>

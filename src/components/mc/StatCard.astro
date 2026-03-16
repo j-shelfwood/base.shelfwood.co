@@ -3,7 +3,7 @@ interface Props {
   label: string;
   value: string | number;
   suffix?: string;
-  colour?: 'gold' | 'diamond' | 'emerald' | 'redstone' | 'amethyst' | 'copper' | 'white';
+  colour?: 'gold' | 'diamond' | 'emerald' | 'redstone' | 'amethyst' | 'copper' | 'white' | 'lapis';
   class?: string;
   id?: string;
 }
@@ -24,6 +24,7 @@ const colourMap: Record<string, string> = {
   redstone: 'text-mc-redstone glow-redstone',
   amethyst: 'text-mc-amethyst',
   copper: 'text-mc-copper',
+  lapis: 'text-mc-lapis',
   white: 'text-mc-white',
 };
 
