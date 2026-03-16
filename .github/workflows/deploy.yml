@@ -11,8 +11,14 @@ jobs:
     steps:
       - name: Trigger Coolify deployment
         run: |
-          curl -s -o /dev/null -w "%{http_code}" \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -H "X-Coolify-Token: ${{ secrets.COOLIFY_WEBHOOK_TOKEN }}" \
-            https://infrastructure.shelfwood.co/api/v1/deploy?uuid=z14ejyc6xhaakfu429j1d3dv\&force=false
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X GET \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_WEBHOOK_TOKEN }}" \
+            "https://infrastructure.shelfwood.co/api/v1/deploy?uuid=z14ejyc6xhaakfu429j1d3dv&force=false")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -1)
+          echo "$BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Deploy trigger failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
