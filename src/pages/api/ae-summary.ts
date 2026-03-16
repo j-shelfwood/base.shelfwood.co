@@ -9,15 +9,17 @@ export const GET: APIRoute = async ({ request }) => {
     const rawRange = url.searchParams.get('range');
     const range = rawRange && VALID_RANGE.test(rawRange) ? rawRange : '-1h';
 
-    const [summary, cpus, itemsHistory, energyHistory, storageHistory] = await Promise.all([
+    const [summary, cpus, itemsHistory, energyHistory, storageHistory, fluidsHistory, chemicalsHistory] = await Promise.all([
       aeSummary(),
       aeCPUs(),
       aeSummaryHistory('items_total', range),
       aeSummaryHistory('energy_usage', range),
       aeSummaryHistory('item_storage_used', range),
+      aeSummaryHistory('fluids_total', range),
+      aeSummaryHistory('chemicals_total', range),
     ]);
 
-    return Response.json({ summary, cpus, itemsHistory, energyHistory, storageHistory });
+    return Response.json({ summary, cpus, itemsHistory, energyHistory, storageHistory, fluidsHistory, chemicalsHistory });
   } catch (err) {
     console.error('ae-summary API error', err);
     return Response.json(

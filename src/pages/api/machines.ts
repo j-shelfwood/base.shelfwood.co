@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { machineSummary, machineTypes, mekanismMachines, miMachines, machineActivityHistory, miMachineSlotItems, machineTypeHistory } from '@/lib/queries';
+import { machineSummary, machineTypes, mekanismMachines, miMachines, machineActivityHistory, machineActivePercentHistory, miMachineSlotItems, miMachineFluids, machineTypeHistory, modActivityHistory } from '@/lib/queries';
 
 const VALID_RANGE = /^-\d+[smhd]$/;
 
@@ -16,16 +16,20 @@ export const GET: APIRoute = async ({ request }) => {
       return Response.json({ history });
     }
 
-    const [summary, types, mekanism, mi, activityHistory, slotItems] = await Promise.all([
+    const [summary, types, mekanism, mi, activityHistory, activityPctHistory, slotItems, fluids, mekHistory, miHistory] = await Promise.all([
       machineSummary(),
       machineTypes(),
       mekanismMachines(),
       miMachines(),
       machineActivityHistory(range),
+      machineActivePercentHistory(range),
       miMachineSlotItems(),
+      miMachineFluids(),
+      modActivityHistory('mekanism', range),
+      modActivityHistory('modern_industrialization', range),
     ]);
 
-    return Response.json({ summary, types, mekanism, mi, activityHistory, slotItems });
+    return Response.json({ summary, types, mekanism, mi, activityHistory, activityPctHistory, slotItems, fluids, mekHistory, miHistory });
   } catch (err) {
     console.error('machines API error', err);
     return Response.json(

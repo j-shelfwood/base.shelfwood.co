@@ -6,24 +6,31 @@ import ProgressBar from '@/components/mc/ProgressBar.astro';
 import LineChart from '@/components/charts/LineChart.astro';
 import DualLineChart from '@/components/charts/DualLineChart.astro';
 import {
-  energySummary, energyFlow, energyHistory, energyStoredHistory, energyFlowHistory, energyDevices,
+  energySummary, energyFlow, energyHistory, energyStoredHistory, energyFlowHistory, energyDevices, energyNetHistory,
   aeSummary, aeCPUs, aeItems, aeItemVelocity, aeSummaryHistory,
   machineSummary, machineTypes, mekanismMachines, miMachines as fetchMiMachines,
-  craftingJobs,
+  machineActivityHistory, machineActivePercentHistory, modActivityHistory,
+  craftingJobs, craftingTaskHistory, craftingCpuHistory,
 } from '@/lib/queries';
 
 const [
-  energyRes, flowRes, eHistRes, eStoredHistRes, fHistRes, devicesRes,
+  energyRes, flowRes, eHistRes, eStoredHistRes, fHistRes, devicesRes, eNetHistRes,
   aeRes, cpusRes, itemsRes, velocityRes,
-  aeItemsHistRes, aeEnergyHistRes, aeStorageHistRes,
+  aeItemsHistRes, aeEnergyHistRes, aeStorageHistRes, aeFluidsHistRes, aeChemicalsHistRes,
+  aeVelocity6hRes,
   machSumRes, machTypesRes, mekRes, miRes,
-  jobsRes,
+  machActivityRes, machActivityPctRes, mekHistRes, miHistRes,
+  jobsRes, taskHistRes, cpuHistRes,
 ] = await Promise.allSettled([
-  energySummary(), energyFlow(), energyHistory('-1h'), energyStoredHistory('-1h'), energyFlowHistory('-1h'), energyDevices(),
+  energySummary(), energyFlow(), energyHistory('-1h'), energyStoredHistory('-1h'), energyFlowHistory('-1h'), energyDevices(), energyNetHistory('-1h'),
   aeSummary(), aeCPUs(), aeItems(), aeItemVelocity('-30m', 15),
   aeSummaryHistory('items_total', '-1h'), aeSummaryHistory('energy_usage', '-1h'), aeSummaryHistory('item_storage_used', '-1h'),
+  aeSummaryHistory('fluids_total', '-1h'), aeSummaryHistory('chemicals_total', '-1h'),
+  aeItemVelocity('-6h', 10),
   machineSummary(), machineTypes(), mekanismMachines(), fetchMiMachines(),
-  craftingJobs(),
+  machineActivityHistory('-1h'), machineActivePercentHistory('-1h'),
+  modActivityHistory('mekanism', '-1h'), modActivityHistory('modern_industrialization', '-1h'),
+  craftingJobs(), craftingTaskHistory('-1h'), craftingCpuHistory('-1h'),
 ]);
 
 const e          = energyRes.status        === 'fulfilled' ? energyRes.value        : null;
@@ -32,17 +39,27 @@ const eHist      = eHistRes.status         === 'fulfilled' ? eHistRes.value     
 const eStoredHist = eStoredHistRes.status  === 'fulfilled' ? eStoredHistRes.value   : [];
 const fHist      = fHistRes.status         === 'fulfilled' ? fHistRes.value         : [];
 const devices    = devicesRes.status       === 'fulfilled' ? devicesRes.value       : [];
+const eNetHist   = eNetHistRes.status      === 'fulfilled' ? eNetHistRes.value      : [];
 const a       = aeRes.status        === 'fulfilled' ? aeRes.value        : null;
 const cpus    = cpusRes.status      === 'fulfilled' ? cpusRes.value      : { total: 0, busy: 0, busy_percent: 0, cpus: [] };
 const items   = itemsRes.status     === 'fulfilled' ? itemsRes.value     : [];
 const velocity = velocityRes.status === 'fulfilled' ? velocityRes.value  : [];
-const aeItemsHist    = aeItemsHistRes.status   === 'fulfilled' ? aeItemsHistRes.value   : [];
-const aeEnergyHist   = aeEnergyHistRes.status  === 'fulfilled' ? aeEnergyHistRes.value  : [];
-const aeStorageHist  = aeStorageHistRes.status === 'fulfilled' ? aeStorageHistRes.value : [];
-const mSum    = machSumRes.status   === 'fulfilled' ? machSumRes.value   : null;
-const mekMachines = mekRes.status   === 'fulfilled' ? mekRes.value       : [];
-const miMachineList = miRes.status  === 'fulfilled' ? miRes.value        : [];
-const jobs    = jobsRes.status      === 'fulfilled' ? jobsRes.value      : [];
+const aeItemsHist    = aeItemsHistRes.status     === 'fulfilled' ? aeItemsHistRes.value     : [];
+const aeEnergyHist   = aeEnergyHistRes.status    === 'fulfilled' ? aeEnergyHistRes.value    : [];
+const aeStorageHist  = aeStorageHistRes.status   === 'fulfilled' ? aeStorageHistRes.value   : [];
+const aeFluidsHist   = aeFluidsHistRes.status    === 'fulfilled' ? aeFluidsHistRes.value    : [];
+const aeChemicalsHist = aeChemicalsHistRes.status === 'fulfilled' ? aeChemicalsHistRes.value : [];
+const aeVelocity6h   = aeVelocity6hRes.status    === 'fulfilled' ? aeVelocity6hRes.value    : [];
+const mSum           = machSumRes.status         === 'fulfilled' ? machSumRes.value         : null;
+const mekMachines    = mekRes.status             === 'fulfilled' ? mekRes.value             : [];
+const miMachineList  = miRes.status              === 'fulfilled' ? miRes.value              : [];
+const machActivity   = machActivityRes.status    === 'fulfilled' ? machActivityRes.value    : [];
+const machActivityPct = machActivityPctRes.status === 'fulfilled' ? machActivityPctRes.value : [];
+const mekHistory     = mekHistRes.status         === 'fulfilled' ? mekHistRes.value         : [];
+const miHistory      = miHistRes.status          === 'fulfilled' ? miHistRes.value          : [];
+const jobs           = jobsRes.status            === 'fulfilled' ? jobsRes.value            : [];
+const taskHistory    = taskHistRes.status        === 'fulfilled' ? taskHistRes.value        : [];
+const cpuHistory     = cpuHistRes.status         === 'fulfilled' ? cpuHistRes.value         : [];
 
 // ── Energy helpers ─────────────────────────────────────────────────────────
 const flowNames = [...new Set(fHist.map(r => r.name))];
@@ -270,8 +287,11 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       </Panel>
     </div>
 
-    <!-- Row 2: FE stored + Storage % + Devices -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
+    <!-- Row 2: Net Flow + FE stored + Storage % + Devices -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-3 mb-6">
+      <Panel title="TOTAL FLOW (FE/t)" raised>
+        <LineChart data={eNetHist} colour="var(--color-mc-emerald)" height={90} suffix=" FE/t" id="chart-energy-net" />
+      </Panel>
       <Panel title="ENERGY STORED (FE)" raised>
         <LineChart data={eStoredHist} colour="var(--color-mc-copper)" height={90} suffix=" FE" id="chart-energy-stored" />
       </Panel>
@@ -285,7 +305,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
         <div id="devices-list" class="space-y-2">
           {devices.length === 0 && <p class="font-mc text-base text-mc-muted">No device data</p>}
           {devices.map(d => (
-            <div class="flex flex-col gap-1">
+            <div class="flex flex-col gap-1 cursor-pointer device-row" data-device={d.name}>
               <div class="flex justify-between">
                 <span class="font-mc text-sm text-mc-white truncate max-w-[60%]">{d.name}</span>
                 <span class="font-mc text-sm text-mc-gold">{(d.percent ?? 0).toFixed(0)}%</span>
@@ -293,6 +313,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
               <div class="mc-progress-track">
                 <div class="mc-progress-fill bg-mc-gold" style={`width:${d.percent ?? 0}%`} />
               </div>
+              <div class="device-sparkline hidden h-8 w-full" data-device-name={d.name}></div>
             </div>
           ))}
         </div>
@@ -315,6 +336,46 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       <StatCard label="Active %" value={mSum ? mSum.active_percent.toFixed(1) + '%' : '—'}
         colour={mSum && mSum.active_percent > 50 ? 'emerald' : 'copper'} id="stat-mach-pct" />
     </div>
+
+    <!-- Machine history charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
+      <Panel title="ACTIVE MACHINES" raised>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="font-mc text-sm text-mc-muted">RANGE:</span>
+          {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['31D','-31d']].map(([l,v]) => (
+            <button data-mach-range={v} class:list={['mach-range-btn mc-slot px-2 py-0.5 font-mc text-sm', v==='-1h' ? 'text-mc-emerald' : 'text-mc-muted']}>{l}</button>
+          ))}
+        </div>
+        <LineChart data={machActivity} colour="var(--color-mc-emerald)" height={80} id="chart-mach-activity" />
+      </Panel>
+      <Panel title="ACTIVE %" raised>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="font-mc text-sm text-mc-muted">RANGE:</span>
+          {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['31D','-31d']].map(([l,v]) => (
+            <button data-mach-pct-range={v} class:list={['mach-pct-range-btn mc-slot px-2 py-0.5 font-mc text-sm', v==='-1h' ? 'text-mc-gold' : 'text-mc-muted']}>{l}</button>
+          ))}
+        </div>
+        <LineChart data={machActivityPct} colour="var(--color-mc-gold)" height={80} suffix="%" id="chart-mach-active-pct" />
+      </Panel>
+    </div>
+    <Panel title="MOD ACTIVITY HISTORY" raised class="mb-6">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="font-mc text-sm text-mc-muted">RANGE:</span>
+        {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['31D','-31d']].map(([l,v]) => (
+          <button data-mod-range={v} class:list={['mod-range-btn mc-slot px-2 py-0.5 font-mc text-sm', v==='-1h' ? 'text-mc-emerald' : 'text-mc-muted']}>{l}</button>
+        ))}
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div>
+          <span class="font-mc text-sm text-mc-amethyst block mb-2">MEKANISM</span>
+          <LineChart data={mekHistory} colour="var(--color-mc-amethyst)" height={80} id="chart-mek-history" />
+        </div>
+        <div>
+          <span class="font-mc text-sm text-mc-diamond block mb-2">MODERN INDUSTRIALIZATION</span>
+          <LineChart data={miHistory} colour="var(--color-mc-diamond)" height={80} id="chart-mi-history" />
+        </div>
+      </div>
+    </Panel>
 
     <Panel title="MEKANISM MACHINES" raised noPadding class="mb-6">
       <div id="mek-grid" class="p-4 flex flex-wrap gap-6">
@@ -494,17 +555,71 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       ))}
       <span id="ae-range-loading" class="font-mc text-sm text-mc-muted hidden">LOADING...</span>
     </div>
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
-      <Panel title="TOTAL ITEMS STORED" raised>
-        <LineChart data={aeItemsHist} colour="var(--color-mc-diamond)" height={90} suffix="" id="chart-ae-items" />
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-3 mb-6">
+      <Panel title="TOTAL ITEMS" raised>
+        <LineChart data={aeItemsHist} colour="var(--color-mc-diamond)" height={80} suffix="" id="chart-ae-items" />
       </Panel>
-      <Panel title="AE ENERGY USAGE" raised>
-        <LineChart data={aeEnergyHist} colour="var(--color-mc-amethyst)" height={90} suffix=" FE/t" id="chart-ae-energy" />
+      <Panel title="TOTAL FLUIDS (mB)" raised>
+        <LineChart data={aeFluidsHist} colour="var(--color-mc-lapis)" height={80} suffix=" mB" id="chart-ae-fluids" />
       </Panel>
-      <Panel title="STORAGE FILL" raised>
-        <LineChart data={aeStorageHist} colour="var(--color-mc-lapis)" height={90} suffix=" slots" id="chart-ae-storage" />
+      <Panel title="TOTAL CHEMICALS" raised>
+        <LineChart data={aeChemicalsHist} colour="var(--color-mc-emerald)" height={80} suffix="" id="chart-ae-chemicals" />
+      </Panel>
+      <Panel title="AE ENERGY" raised>
+        <LineChart data={aeEnergyHist} colour="var(--color-mc-amethyst)" height={80} suffix=" FE/t" id="chart-ae-energy" />
+      </Panel>
+      <Panel title="ITEM FILL" raised>
+        <LineChart data={aeStorageHist} colour="var(--color-mc-lapis)" height={80} suffix=" slots" id="chart-ae-storage" />
       </Panel>
     </div>
+
+    <!-- Item velocity leaderboard (6H) -->
+    <Panel title="ITEM VELOCITY (6H)" raised class="mb-6">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div>
+          <span class="font-mc text-sm text-mc-emerald block mb-2">TOP GAINERS</span>
+          <div class="space-y-1" id="velocity-gainers-6h">
+            {(() => {
+              const gainers = aeVelocity6h.filter(v => v.delta > 0).slice(0, 8);
+              const max = Math.max(...gainers.map(v => v.delta), 1);
+              return gainers.length > 0
+                ? gainers.map(v => {
+                    const pct = Math.min(100, (v.delta / max) * 100);
+                    return (
+                      <div class="flex items-center gap-2">
+                        <span class="font-mc text-sm text-mc-muted truncate w-32 shrink-0">{itemLabel(v.item)}</span>
+                        <div class="flex-1 mc-progress-track"><div class="mc-progress-fill bg-mc-emerald" style={`width:${pct}%`} /></div>
+                        <span class="font-mc text-sm text-mc-emerald w-14 text-right shrink-0">+{v.delta >= 1000 ? (v.delta/1000).toFixed(1)+'K' : v.delta}</span>
+                      </div>
+                    );
+                  })
+                : <p class="font-mc text-sm text-mc-muted">No production detected</p>;
+            })()}
+          </div>
+        </div>
+        <div>
+          <span class="font-mc text-sm text-mc-redstone block mb-2">TOP CONSUMERS</span>
+          <div class="space-y-1" id="velocity-losers-6h">
+            {(() => {
+              const losers = aeVelocity6h.filter(v => v.delta < 0).slice(0, 8);
+              const max = Math.max(...losers.map(v => Math.abs(v.delta)), 1);
+              return losers.length > 0
+                ? losers.map(v => {
+                    const pct = Math.min(100, (Math.abs(v.delta) / max) * 100);
+                    return (
+                      <div class="flex items-center gap-2">
+                        <span class="font-mc text-sm text-mc-muted truncate w-32 shrink-0">{itemLabel(v.item)}</span>
+                        <div class="flex-1 mc-progress-track"><div class="mc-progress-fill bg-mc-redstone" style={`width:${pct}%`} /></div>
+                        <span class="font-mc text-sm text-mc-redstone w-14 text-right shrink-0">{Math.abs(v.delta) >= 1000 ? (v.delta/1000).toFixed(1)+'K' : v.delta}</span>
+                      </div>
+                    );
+                  })
+                : <p class="font-mc text-sm text-mc-muted">No consumption detected</p>;
+            })()}
+          </div>
+        </div>
+      </div>
+    </Panel>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
       <div data-panel="producers">
@@ -634,6 +749,44 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       <StatCard label="CPUs Free"   value={cpus.total - cpus.busy}
         colour={cpus.total - cpus.busy > 0 ? 'emerald' : 'redstone'} id="stat-craft-free" />
     </div>
+
+    <!-- Crafting history charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
+      <Panel title="TASK QUEUE HISTORY" raised>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="font-mc text-sm text-mc-muted">RANGE:</span>
+          {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['31D','-31d']].map(([l,v]) => (
+            <button data-queue-range={v} class:list={['queue-range-btn mc-slot px-2 py-0.5 font-mc text-sm', v==='-1h' ? 'text-mc-gold' : 'text-mc-muted']}>{l}</button>
+          ))}
+        </div>
+        <LineChart data={taskHistory} colour="var(--color-mc-gold)" height={80} id="chart-task-queue" />
+      </Panel>
+      <Panel title="CPU UTILIZATION %" raised>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="font-mc text-sm text-mc-muted">RANGE:</span>
+          {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['31D','-31d']].map(([l,v]) => (
+            <button data-cpu-range={v} class:list={['cpu-range-btn mc-slot px-2 py-0.5 font-mc text-sm', v==='-1h' ? 'text-mc-amethyst' : 'text-mc-muted']}>{l}</button>
+          ))}
+        </div>
+        <LineChart data={cpuHistory} colour="var(--color-mc-amethyst)" height={80} suffix="%" id="chart-cpu-util" />
+      </Panel>
+    </div>
+
+    <!-- Active jobs -->
+    <Panel title="ACTIVE JOBS" raised class="mb-6">
+      <div id="active-jobs-list" class="space-y-2">
+        {jobs.length === 0 && <p class="font-mc text-base text-mc-muted py-2">No active crafting jobs</p>}
+        {jobs.map(j => (
+          <div class="flex items-center justify-between pixel-border px-3 py-2 bg-mc-stone/20">
+            <div class="flex flex-col">
+              <span class="font-mc text-base text-mc-white capitalize">{itemLabel(j.item)}</span>
+              <span class="font-mc text-sm text-mc-muted">{j.cpu} · CPU {j.cpu_index}</span>
+            </div>
+            <span class="font-mc text-base text-mc-amethyst">{fmtQty(j.quantity)}×</span>
+          </div>
+        ))}
+      </div>
+    </Panel>
 
     <Panel title="CPU GRID" raised>
       <div id="cpu-grid" class="flex flex-wrap gap-3">
@@ -925,6 +1078,10 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     }
     if (data.mekanism) renderMachineGrid('mek-grid', data.mekanism, buildMekCell, mColour, fmtType);
     if (data.mi) renderMachineGrid('mi-grid', data.mi, buildMICell, (t) => miColour(t.replace('modern_industrialization:', '').replace(/_/g, ' ')), (t) => t.replace('modern_industrialization:', '').replace(/_/g, ' '));
+    if (data.activityHistory)    renderChart('chart-mach-activity',  [{ points: data.activityHistory, colour: 'var(--color-mc-emerald)', fill: true }]);
+    if (data.activityPctHistory) renderChart('chart-mach-active-pct', [{ points: data.activityPctHistory, colour: 'var(--color-mc-gold)', fill: true, suffix: '%' }]);
+    if (data.mekHistory) renderChart('chart-mek-history', [{ points: data.mekHistory, colour: 'var(--color-mc-amethyst)', fill: true }]);
+    if (data.miHistory)  renderChart('chart-mi-history',  [{ points: data.miHistory, colour: 'var(--color-mc-diamond)', fill: true }]);
   }
 
   // ── Storage refresh ────────────────────────────────────────────────────────
@@ -1133,6 +1290,24 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     const data = await fetch('/api/crafting').then(r => r.json());
     if (data.error) return;
     if (data.cpus) renderCrafting(data.cpus, data.jobs ?? []);
+    if (data.taskHistory) renderChart('chart-task-queue', [{ points: data.taskHistory, colour: 'var(--color-mc-gold)', fill: true }]);
+    if (data.cpuHistory)  renderChart('chart-cpu-util',   [{ points: data.cpuHistory, colour: 'var(--color-mc-amethyst)', fill: true, suffix: '%' }]);
+    // Refresh active jobs list
+    const jobsList = document.getElementById('active-jobs-list');
+    if (jobsList && data.jobs) {
+      jobsList.innerHTML = data.jobs.length === 0
+        ? '<p class="font-mc text-base text-mc-muted py-2">No active crafting jobs</p>'
+        : data.jobs.map((j: {item:string;cpu:string;cpu_index:number;quantity:number}) => {
+            const label = j.item.replace(/^.*:/, '').replace(/_/g, ' ');
+            return `<div class="flex items-center justify-between pixel-border px-3 py-2 bg-mc-stone/20">
+              <div class="flex flex-col">
+                <span class="font-mc text-base text-mc-white capitalize">${label}</span>
+                <span class="font-mc text-sm text-mc-muted">${j.cpu} · CPU ${j.cpu_index}</span>
+              </div>
+              <span class="font-mc text-base text-mc-amethyst">${fmtQty(j.quantity)}×</span>
+            </div>`;
+          }).join('');
+    }
   }
 
   // ── Energy range selector ─────────────────────────────────────────────────
@@ -1144,57 +1319,114 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     return v.toFixed(1);
   }
 
-  function renderSvgLine(containerId: string, points: {time:string;value:number}[], colour: string, suffix = '') {
+  type Series = { points: { time: string; value: number }[]; colour: string; fill?: boolean; suffix?: string };
+
+  function renderChart(containerId: string, series: Series[], options: { height?: number } = {}) {
     const el = document.getElementById(containerId);
-    if (!el || points.length < 2) return;
+    if (!el) return;
+    const allPoints = series.flatMap(s => s.points);
+    if (allPoints.length < 2) return;
+
     const existingSvg = el.querySelector('svg');
-    const H = existingSvg ? (parseInt(existingSvg.getAttribute('height') ?? '') || parseInt((existingSvg as SVGElement).style?.height ?? '') || 90) : 90;
+    const H = options.height ?? (existingSvg ? (parseInt(existingSvg.getAttribute('height') ?? '') || 80) : 80);
     const W = 400, pad = 6;
-    const vals = points.map(p => p.value);
-    const minV = Math.min(...vals), maxV = Math.max(...vals);
+
+    // Calculate shared Y-axis scale across all series
+    const allVals = allPoints.map(p => p.value);
+    const minV = Math.min(...allVals), maxV = Math.max(...allVals);
     const vRange = maxV - minV || 1;
-    const xs = points.map((_, i) => pad + (i / (points.length - 1)) * (W - pad * 2));
-    const ys = points.map(p => H - pad - ((p.value - minV) / vRange) * (H - pad * 2));
-    const d = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i]!.toFixed(1)}`).join(' ');
-    const fillD = `${d} L${xs[xs.length-1]!.toFixed(1)},${H} L${xs[0]!.toFixed(1)},${H} Z`;
-    const svg = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px">
-      <path d="${fillD}" fill="${colour}" opacity="0.15"/>
-      <path d="${d}" fill="none" stroke="${colour}" stroke-width="1.5" opacity="0.9"/>
-    </svg>`;
+
+    // Build SVG paths per series
+    const paths = series.map(({ points, colour, fill }) => {
+      if (points.length < 2) return '';
+      const xs = points.map((_, i) => pad + (i / (points.length - 1)) * (W - pad * 2));
+      const ys = points.map(p => H - pad - ((p.value - minV) / vRange) * (H - pad * 2));
+      const d = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i]!.toFixed(1)}`).join(' ');
+      const fillPath = fill !== false
+        ? `<path d="${d} L${xs[xs.length-1]!.toFixed(1)},${H} L${xs[0]!.toFixed(1)},${H} Z" fill="${colour}" opacity="0.15"/>`
+        : '';
+      return `${fillPath}<path d="${d}" fill="none" stroke="${colour}" stroke-width="1.5" opacity="0.9"/>`;
+    }).join('');
+
+    const svg = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px">${paths}</svg>`;
     if (existingSvg) existingSvg.outerHTML = svg;
     else el.insertAdjacentHTML('afterbegin', svg);
-    // Update labels row (LineChart renders flex row with min/current/max spans)
+
+    // Update labels row if present (min / current / max)
     const labelsRow = el.querySelector('div.flex.justify-between');
-    if (labelsRow) {
+    if (labelsRow && series[0]) {
+      const { points, suffix = '' } = series[0];
+      const vals = points.map(p => p.value);
       const spans = labelsRow.querySelectorAll('span');
       if (spans.length >= 3) {
-        spans[0]!.textContent = fmtChartVal(minV) + suffix;
+        spans[0]!.textContent = fmtChartVal(Math.min(...vals)) + suffix;
         spans[1]!.textContent = fmtChartVal(vals[vals.length - 1]!) + suffix;
-        spans[2]!.textContent = fmtChartVal(maxV) + suffix;
+        spans[2]!.textContent = fmtChartVal(Math.max(...vals)) + suffix;
       }
     }
   }
 
-  function renderDualSvg(containerId: string, ptsA: {time:string;value:number}[], ptsB: {time:string;value:number}[], colA: string, colB: string) {
-    const el = document.getElementById(containerId);
-    if (!el || ptsA.length < 2 || ptsB.length < 2) return;
-    const W = 400, H = 110, pad = 6;
-    const allVals = [...ptsA.map(p => p.value), ...ptsB.map(p => p.value)];
-    const min = Math.min(...allVals), max = Math.max(...allVals);
-    const range = max - min || 1;
-    const toPath = (pts: {time:string;value:number}[]) => {
-      const xs = pts.map((_, i) => pad + (i / (pts.length - 1)) * (W - pad * 2));
-      const ys = pts.map(p => H - pad - ((p.value - min) / range) * (H - pad * 2));
-      return xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i]!.toFixed(1)}`).join(' ');
-    };
-    const dA = toPath(ptsA), dB = toPath(ptsB);
-    const svg = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-      <path d="${dA}" fill="none" stroke="${colA}" stroke-width="1.5" opacity="0.9"/>
-      <path d="${dB}" fill="none" stroke="${colB}" stroke-width="1.5" opacity="0.9"/>
+  // ── Per-device energy sparklines ──────────────────────────────────────────
+  function renderMiniLine(container: HTMLElement, points: {time:string;value:number}[], colour: string) {
+    if (points.length < 2) { container.innerHTML = '<span class="font-mc text-xs text-mc-muted">no data</span>'; return; }
+    const W = 300, H = 28, pad = 2;
+    const vals = points.map(p => p.value);
+    const min = Math.min(...vals), max = Math.max(...vals), r = max - min || 1;
+    const xs = points.map((_, i) => pad + (i / (points.length - 1)) * (W - pad * 2));
+    const ys = points.map(p => H - pad - ((p.value - min) / r) * (H - pad * 2));
+    const d = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i]!.toFixed(1)}`).join(' ');
+    container.innerHTML = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <path d="${d}" fill="none" stroke="${colour}" stroke-width="1.2" opacity="0.8"/>
     </svg>`;
-    const existing = el.querySelector('svg');
-    if (existing) existing.outerHTML = svg; else el.innerHTML = svg;
   }
+
+  type ChartSpec = {
+    dataKey: string;
+    chartId: string;
+    colour: string;
+    suffix?: string;
+  };
+
+  function setupRangeSelector(
+    btnClass: string,
+    dataAttr: string,
+    apiUrl: (range: string) => string,
+    charts: ChartSpec[],
+    activeColour = 'text-mc-emerald'
+  ) {
+    document.querySelectorAll<HTMLButtonElement>(`.${btnClass}`).forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const range = btn.dataset[dataAttr] ?? '-1h';
+        document.querySelectorAll<HTMLButtonElement>(`.${btnClass}`).forEach(b => {
+          b.className = `${btnClass} mc-slot px-2 py-0.5 font-mc text-sm ` +
+            (b === btn ? activeColour : 'text-mc-muted');
+        });
+        const data = await fetch(apiUrl(range)).then(r => r.json()).catch(() => null);
+        if (!data) return;
+        for (const { dataKey, chartId, colour, suffix } of charts) {
+          if (data[dataKey]) renderChart(chartId, [{ points: data[dataKey], colour, fill: true, suffix: suffix ?? '' }]);
+        }
+      });
+    });
+  }
+
+  document.querySelectorAll<HTMLElement>('.device-row').forEach(row => {
+    row.addEventListener('click', async () => {
+      const name = row.dataset.device;
+      if (!name) return;
+      const sparkContainer = row.querySelector('.device-sparkline') as HTMLElement | null;
+      if (!sparkContainer) return;
+      if (!sparkContainer.classList.contains('hidden')) {
+        sparkContainer.classList.add('hidden');
+        return;
+      }
+      sparkContainer.classList.remove('hidden');
+      if (sparkContainer.querySelector('svg')) return; // already loaded
+      sparkContainer.innerHTML = '<span class="font-mc text-xs text-mc-muted">loading...</span>';
+      const data = await fetch(`/api/energy-storage?history=${encodeURIComponent(name)}&range=-1h`).then(r => r.json()).catch(() => null);
+      if (data?.history) renderMiniLine(sparkContainer, data.history, 'var(--color-mc-gold)');
+    });
+  });
 
   let energyRange = '-1h';
   async function switchEnergyRange(range: string) {
@@ -1214,12 +1446,17 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       const names = Object.keys(data.flowSeries);
       const ptsA = data.flowSeries[names[0]] ?? [];
       const ptsB = data.flowSeries[names[1]] ?? ptsA;
-      renderDualSvg('chart-gen-con', ptsA, ptsB, 'var(--color-mc-emerald)', 'var(--color-mc-redstone)');
+      renderChart('chart-gen-con', [
+        { points: ptsA, colour: 'var(--color-mc-emerald)', fill: false },
+        { points: ptsB, colour: 'var(--color-mc-redstone)', fill: false }
+      ], { height: 110 });
     }
+    // Net Flow
+    if (data.netHistory) renderChart('chart-energy-net', [{ points: data.netHistory, colour: 'var(--color-mc-emerald)', fill: true, suffix: ' FE/t' }]);
     // FE stored
-    if (data.storedHistory) renderSvgLine('chart-energy-stored', data.storedHistory, 'var(--color-mc-copper)', ' FE');
+    if (data.storedHistory) renderChart('chart-energy-stored', [{ points: data.storedHistory, colour: 'var(--color-mc-copper)', fill: true, suffix: ' FE' }]);
     // Storage %
-    if (data.pctHistory) renderSvgLine('chart-energy-pct', data.pctHistory, 'var(--color-mc-gold)', '%');
+    if (data.pctHistory) renderChart('chart-energy-pct', [{ points: data.pctHistory, colour: 'var(--color-mc-gold)', fill: true, suffix: '%' }]);
   }
 
   document.querySelectorAll<HTMLButtonElement>('.energy-range-btn').forEach(btn => {
@@ -1242,9 +1479,11 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     const data = await fetch(`/api/ae-summary?range=${range}`).then(r => r.json()).catch(() => null);
     if (loading) loading.classList.add('hidden');
     if (!data) return;
-    if (data.itemsHistory) renderSvgLine('chart-ae-items', data.itemsHistory, 'var(--color-mc-diamond)');
-    if (data.energyHistory) renderSvgLine('chart-ae-energy', data.energyHistory, 'var(--color-mc-amethyst)', ' FE/t');
-    if (data.storageHistory) renderSvgLine('chart-ae-storage', data.storageHistory, 'var(--color-mc-lapis)', ' slots');
+    if (data.itemsHistory)    renderChart('chart-ae-items',     [{ points: data.itemsHistory, colour: 'var(--color-mc-diamond)', fill: true }]);
+    if (data.fluidsHistory)   renderChart('chart-ae-fluids',    [{ points: data.fluidsHistory, colour: 'var(--color-mc-lapis)', fill: true, suffix: ' mB' }]);
+    if (data.chemicalsHistory) renderChart('chart-ae-chemicals', [{ points: data.chemicalsHistory, colour: 'var(--color-mc-emerald)', fill: true }]);
+    if (data.energyHistory)   renderChart('chart-ae-energy',    [{ points: data.energyHistory, colour: 'var(--color-mc-amethyst)', fill: true, suffix: ' FE/t' }]);
+    if (data.storageHistory)  renderChart('chart-ae-storage',   [{ points: data.storageHistory, colour: 'var(--color-mc-lapis)', fill: true, suffix: ' slots' }]);
   }
 
   document.querySelectorAll<HTMLButtonElement>('.ae-range-btn').forEach(btn => {
@@ -1253,6 +1492,29 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       if (r) switchAERange(r);
     });
   });
+
+  // ── Machine history range buttons ─────────────────────────────────────────
+  setupRangeSelector('mach-range-btn', 'machRange', r => `/api/machines?range=${r}`, [
+    { dataKey: 'activityHistory', chartId: 'chart-mach-activity', colour: 'var(--color-mc-emerald)' },
+  ]);
+
+  setupRangeSelector('mach-pct-range-btn', 'machPctRange', r => `/api/machines?range=${r}`, [
+    { dataKey: 'activityPctHistory', chartId: 'chart-mach-active-pct', colour: 'var(--color-mc-gold)', suffix: '%' },
+  ], 'text-mc-gold');
+
+  setupRangeSelector('mod-range-btn', 'modRange', r => `/api/machines?range=${r}`, [
+    { dataKey: 'mekHistory', chartId: 'chart-mek-history', colour: 'var(--color-mc-amethyst)' },
+    { dataKey: 'miHistory',  chartId: 'chart-mi-history',  colour: 'var(--color-mc-diamond)' },
+  ]);
+
+  // ── Crafting history range buttons ────────────────────────────────────────
+  setupRangeSelector('queue-range-btn', 'queueRange', r => `/api/crafting?range=${r}`, [
+    { dataKey: 'taskHistory', chartId: 'chart-task-queue', colour: 'var(--color-mc-gold)' },
+  ], 'text-mc-gold');
+
+  setupRangeSelector('cpu-range-btn', 'cpuRange', r => `/api/crafting?range=${r}`, [
+    { dataKey: 'cpuHistory', chartId: 'chart-cpu-util', colour: 'var(--color-mc-amethyst)', suffix: '%' },
+  ], 'text-mc-amethyst');
 
   // ── Kick off all loops ────────────────────────────────────────────────────
   setInterval(refreshOverview, OVERVIEW_MS);
