@@ -1,10 +1,20 @@
 import type { APIRoute } from 'astro';
-import { machineSummary, machineTypes, mekanismMachines, miMachines, machineActivityHistory, miMachineSlotItems } from '@/lib/queries';
+import { machineSummary, machineTypes, mekanismMachines, miMachines, machineActivityHistory, miMachineSlotItems, machineTypeHistory } from '@/lib/queries';
+
+const VALID_RANGE = /^-\d+[smhd]$/;
 
 export const GET: APIRoute = async ({ request }) => {
   try {
     const url = new URL(request.url);
-    const range = url.searchParams.get('range') ?? '-1h';
+    const rawRange = url.searchParams.get('range');
+    const range = rawRange && VALID_RANGE.test(rawRange) ? rawRange : '-1h';
+    const typeHistParam = url.searchParams.get('typeHistory');
+
+    // If typeHistory param given, return just that series
+    if (typeHistParam) {
+      const history = await machineTypeHistory(typeHistParam, range);
+      return Response.json({ history });
+    }
 
     const [summary, types, mekanism, mi, activityHistory, slotItems] = await Promise.all([
       machineSummary(),

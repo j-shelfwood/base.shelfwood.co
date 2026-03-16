@@ -111,6 +111,10 @@ function formatMachineType(type: string): string {
       <button data-chart-range="-6h"  class="chart-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">6H</button>
       <button data-chart-range="-24h" class="chart-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">24H</button>
       <button data-chart-range="-72h" class="chart-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">3D</button>
+      <button data-chart-range="-7d"  class="chart-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">7D</button>
+      <button data-chart-range="-14d" class="chart-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">14D</button>
+      <button data-chart-range="-21d" class="chart-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">21D</button>
+      <button data-chart-range="-31d" class="chart-range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">31D</button>
     </div>
     <LineChart
       data={machActivity}
@@ -124,13 +128,16 @@ function formatMachineType(type: string): string {
   <Panel title="TYPE SUMMARY" raised noPadding class="mb-6">
     <div class="divide-y divide-mc-cobble/50">
       {types.filter(t => t.total_count > 0).map(t => (
-        <div class="px-4 py-2 flex items-center gap-3">
-          <span class="font-mc text-xs text-mc-white w-40 truncate capitalize">{t.type.replace(/_/g, ' ')}</span>
-          <div class="flex-1 h-1.5 bg-mc-shadow">
-            <div class="h-full bg-mc-emerald transition-all" style={`width:${t.active_percent.toFixed(0)}%`} />
+        <div class="px-4 py-3 flex flex-col gap-2 cursor-pointer hover:bg-mc-stone/10 transition-colors" data-type-summary={t.type}>
+          <div class="flex items-center gap-3">
+            <span class="font-mc text-xs text-mc-white w-40 truncate capitalize">{t.type.replace(/_/g, ' ')}</span>
+            <div class="flex-1 h-1.5 bg-mc-shadow">
+              <div class="h-full bg-mc-emerald transition-all" style={`width:${t.active_percent.toFixed(0)}%`} />
+            </div>
+            <span class="font-mc text-xs text-mc-emerald w-12 text-right">{t.active_count}/{t.total_count}</span>
+            <span class="font-mc text-xs text-mc-muted w-12 text-right">{t.active_percent.toFixed(0)}%</span>
           </div>
-          <span class="font-mc text-xs text-mc-emerald w-12 text-right">{t.active_count}/{t.total_count}</span>
-          <span class="font-mc text-xs text-mc-muted w-12 text-right">{t.active_percent.toFixed(0)}%</span>
+          <div class="type-sparkline-container h-8 w-full opacity-60" data-type={t.type}></div>
         </div>
       ))}
     </div>
@@ -352,6 +359,33 @@ function formatMachineType(type: string): string {
     </svg>`;
     if (existing) existing.outerHTML = svgHtml;
     else container.innerHTML = svgHtml;
+  }
+
+  // ── Per-type sparklines ───────────────────────────────────────────────────
+  function renderMiniSparkline(container: HTMLElement, points: {time:string;value:number}[]) {
+    if (points.length < 2) return;
+    const W = 200, H = 28, pad = 2;
+    const vals = points.map(p => p.value);
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const range = max - min || 1;
+    const xs = points.map((_, i) => pad + (i / (points.length - 1)) * (W - pad * 2));
+    const ys = points.map(p => H - pad - ((p.value - min) / range) * (H - pad * 2));
+    const d = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i]!.toFixed(1)}`).join(' ');
+    container.innerHTML = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <path d="${d}" fill="none" stroke="var(--color-mc-emerald)" stroke-width="1" opacity="0.7"/>
+    </svg>`;
+  }
+
+  async function loadTypeSparklines() {
+    const containers = document.querySelectorAll<HTMLElement>('.type-sparkline-container');
+    for (const c of containers) {
+      const type = c.dataset.type;
+      if (!type) continue;
+      try {
+        const data = await fetch(`/api/machines?typeHistory=${encodeURIComponent(type)}&range=-1h`).then(r => r.json());
+        if (data.history?.length > 1) renderMiniSparkline(c, data.history);
+      } catch {}
+    }
   }
 
   const COLOURS: Record<string, string> = {
@@ -722,4 +756,5 @@ function formatMachineType(type: string): string {
 
   setInterval(refresh, REFRESH_MS);
   refresh(); // immediate first update
+  loadTypeSparklines(); // load per-type sparklines
 </script>

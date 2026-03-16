@@ -9,6 +9,22 @@
 
 import { queryFlux, INFLUX_BUCKET } from './influx';
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Pick a sensible aggregation window based on query range */
+function rangeToWindow(range: string): string {
+  const match = range.match(/^-(\d+)([smhd])$/);
+  if (!match) return '1m';
+  const n = parseInt(match[1]!);
+  const unit = match[2];
+  const minutes = unit === 's' ? n / 60 : unit === 'm' ? n : unit === 'h' ? n * 60 : n * 1440;
+  if (minutes <= 60)   return '1m';
+  if (minutes <= 360)  return '5m';
+  if (minutes <= 1440) return '15m';
+  if (minutes <= 4320) return '30m';
+  return '1h';
+}
+
 // ── Energy ────────────────────────────────────────────────────────────────────
 
 export interface EnergySummary {
@@ -59,11 +75,12 @@ export interface TimePoint {
 }
 
 export async function energyHistory(range = '-1h'): Promise<TimePoint[]> {
+  const window = rangeToWindow(range);
   const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
   |> range(start: ${range})
   |> filter(fn: (r) => r._measurement == "energy_total" and r._field == "percent")
-  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)
+  |> aggregateWindow(every: ${window}, fn: mean, createEmpty: false)
 `);
   return rows.map(r => ({
     time: String(r._time ?? ''),
@@ -72,16 +89,56 @@ from(bucket: "${INFLUX_BUCKET}")
 }
 
 export async function energyFlowHistory(range = '-1h'): Promise<{ time: string; value: number; name: string }[]> {
+  const window = rangeToWindow(range);
   const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
   |> range(start: ${range})
   |> filter(fn: (r) => r._measurement == "energy_flow" and r._field == "rate_fe_t")
-  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)
+  |> aggregateWindow(every: ${window}, fn: mean, createEmpty: false)
 `);
   return rows.map(r => ({
     time: String(r._time ?? ''),
     value: (r._value as number) ?? 0,
     name: String(r.name ?? ''),
+  }));
+}
+
+export async function energyStoredHistory(range = '-1h'): Promise<TimePoint[]> {
+  const window = rangeToWindow(range);
+  const rows = await queryFlux(`
+from(bucket: "${INFLUX_BUCKET}")
+  |> range(start: ${range})
+  |> filter(fn: (r) => r._measurement == "energy_total" and r._field == "stored_fe")
+  |> aggregateWindow(every: ${window}, fn: mean, createEmpty: false)
+`);
+  return rows.map(r => ({
+    time: String(r._time ?? ''),
+    value: (r._value as number) ?? 0,
+  }));
+}
+
+export async function energyNetHistory(range = '-1h'): Promise<TimePoint[]> {
+  // Net flow = generation rate minus consumption rate per time window
+  const window = rangeToWindow(range);
+  const rows = await queryFlux(`
+from(bucket: "${INFLUX_BUCKET}")
+  |> range(start: ${range})
+  |> filter(fn: (r) => r._measurement == "energy_flow" and r._field == "rate_fe_t")
+  |> aggregateWindow(every: ${window}, fn: mean, createEmpty: false)
+  |> group(columns: ["_time"])
+  |> reduce(
+      identity: {net: 0.0, count: 0},
+      fn: (r, accumulator) => ({
+        net: accumulator.net + r._value,
+        count: accumulator.count + 1,
+      })
+    )
+  |> map(fn: (r) => ({ r with _value: r.net, _field: "net_fe_t" }))
+  |> group()
+`);
+  return rows.map(r => ({
+    time: String(r._time ?? ''),
+    value: (r._value as number) ?? 0,
   }));
 }
 
@@ -134,6 +191,20 @@ from(bucket: "${INFLUX_BUCKET}")
     energy_stored: (r.energy_stored as number) ?? 0,
     energy_capacity: (r.energy_capacity as number) ?? 0,
   };
+}
+
+export async function aeSummaryHistory(field: 'items_total' | 'energy_usage' | 'item_storage_used', range = '-1h'): Promise<TimePoint[]> {
+  const rows = await queryFlux(`
+from(bucket: "${INFLUX_BUCKET}")
+  |> range(start: ${range})
+  |> filter(fn: (r) => r._measurement == "ae_summary" and r._field == "${field}")
+  |> group(columns: ["node", "_field"])
+  |> aggregateWindow(every: ${rangeToWindow(range)}, fn: last, createEmpty: false)
+  |> group(columns: ["_time"])
+  |> sum()
+  |> group()
+`);
+  return rows.map(r => ({ time: String(r._time ?? ''), value: (r._value as number) ?? 0 }));
 }
 
 export interface AEItem {
@@ -723,6 +794,20 @@ from(bucket: "${INFLUX_BUCKET}")
   |> group(columns: ["node", "_field"])
   |> aggregateWindow(every: 1m, fn: last, createEmpty: false)
   |> group(columns: ["_time"])
+  |> sum()
+  |> group()
+`);
+  return rows.map(r => ({ time: String(r._time ?? ''), value: (r._value as number) ?? 0 }));
+}
+
+export async function machineTypeHistory(type: string, range = '-1h'): Promise<TimePoint[]> {
+  const rows = await queryFlux(`
+from(bucket: "${INFLUX_BUCKET}")
+  |> range(start: ${range})
+  |> filter(fn: (r) => r._measurement == "mekanism_machine" and r._field == "active" and r.type == "${type}")
+  |> group(columns: ["node", "type", "_field"])
+  |> aggregateWindow(every: ${rangeToWindow(range)}, fn: sum, createEmpty: false)
+  |> group(columns: ["_time", "type"])
   |> sum()
   |> group()
 `);

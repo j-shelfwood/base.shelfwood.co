@@ -3,9 +3,10 @@ import Layout from '@/layouts/Layout.astro';
 import Panel from '@/components/mc/Panel.astro';
 import StatCard from '@/components/mc/StatCard.astro';
 import ProgressBar from '@/components/mc/ProgressBar.astro';
-import { aeSummary, aeItems, aeItemVelocity, aeFluids, aeFluidVelocity, aeChemicals, aeChemicalVelocity } from '@/lib/queries';
+import LineChart from '@/components/charts/LineChart.astro';
+import { aeSummary, aeItems, aeItemVelocity, aeFluids, aeFluidVelocity, aeChemicals, aeChemicalVelocity, aeSummaryHistory } from '@/lib/queries';
 
-const [summaryRes, itemsRes, velocityRes, fluidRes, fluidVelRes, chemRes, chemVelRes] = await Promise.allSettled([
+const [summaryRes, itemsRes, velocityRes, fluidRes, fluidVelRes, chemRes, chemVelRes, itemsHistRes, energyHistRes, storageHistRes] = await Promise.allSettled([
   aeSummary(),
   aeItems(),
   aeItemVelocity('-30m', 15),
@@ -13,6 +14,9 @@ const [summaryRes, itemsRes, velocityRes, fluidRes, fluidVelRes, chemRes, chemVe
   aeFluidVelocity('-30m', 15),
   aeChemicals(),
   aeChemicalVelocity('-30m', 15),
+  aeSummaryHistory('items_total', '-1h'),
+  aeSummaryHistory('energy_usage', '-1h'),
+  aeSummaryHistory('item_storage_used', '-1h'),
 ]);
 
 const summary  = summaryRes.status  === 'fulfilled' ? summaryRes.value  : null;
@@ -22,6 +26,9 @@ const fluids = fluidRes.status === 'fulfilled' ? fluidRes.value : [];
 const fluidVelocity = fluidVelRes.status === 'fulfilled' ? fluidVelRes.value : [];
 const chemicals = chemRes.status === 'fulfilled' ? chemRes.value : [];
 const chemVelocity = chemVelRes.status === 'fulfilled' ? chemVelRes.value : [];
+const aeItemsHist   = itemsHistRes.status   === 'fulfilled' ? itemsHistRes.value   : [];
+const aeEnergyHist  = energyHistRes.status  === 'fulfilled' ? energyHistRes.value  : [];
+const aeStorageHist = storageHistRes.status === 'fulfilled' ? storageHistRes.value : [];
 
 function fmt(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
@@ -69,6 +76,29 @@ const totalChemicals = chemicals.reduce((sum, c) => sum + c.amount, 0);
         />
       </div>
     </div>
+  </div>
+
+  <!-- AE Overview Charts -->
+  <div class="flex items-center gap-2 mb-3">
+    <span class="font-mc text-base text-mc-muted">RANGE:</span>
+    {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['21D','-21d'],['31D','-31d']].map(([label, val]) => (
+      <button data-storage-range={val}
+        class:list={['storage-hist-btn font-mc text-sm px-3 py-1 pixel-border transition-colors',
+          val === '-1h' ? 'bg-mc-diamond/20 text-mc-diamond border-mc-diamond' : 'bg-mc-stone/40 text-mc-muted hover:text-mc-white']}
+      >{label}</button>
+    ))}
+    <span id="storage-hist-loading" class="font-mc text-sm text-mc-muted hidden">LOADING...</span>
+  </div>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
+    <Panel title="TOTAL ITEMS STORED" raised>
+      <LineChart data={aeItemsHist} colour="var(--color-mc-diamond)" height={80} suffix="" id="chart-storage-items" />
+    </Panel>
+    <Panel title="AE ENERGY USAGE" raised>
+      <LineChart data={aeEnergyHist} colour="var(--color-mc-amethyst)" height={80} suffix=" FE/t" id="chart-storage-energy" />
+    </Panel>
+    <Panel title="STORAGE FILL" raised>
+      <LineChart data={aeStorageHist} colour="var(--color-mc-lapis)" height={80} suffix=" slots" id="chart-storage-fill" />
+    </Panel>
   </div>
 
   <!-- Tabs -->
@@ -503,6 +533,45 @@ const totalChemicals = chemicals.reduce((sum, c) => sum + c.amount, 0);
       </svg>`;
   }
 
+  function fmtChartVal(v: number): string {
+    const abs = Math.abs(v);
+    if (abs >= 1_000_000_000) return (v / 1_000_000_000).toFixed(1) + 'B';
+    if (abs >= 1_000_000) return (v / 1_000_000).toFixed(1) + 'M';
+    if (abs >= 1_000) return (v / 1_000).toFixed(1) + 'K';
+    return v.toFixed(1);
+  }
+
+  function renderSvgLine(containerId: string, points: {time:string;value:number}[], colour: string, suffix = '') {
+    const el = document.getElementById(containerId);
+    if (!el || points.length < 2) return;
+    const existingSvg = el.querySelector('svg');
+    const H = existingSvg ? (parseInt(existingSvg.getAttribute('height') ?? '') || 80) : 80;
+    const W = 400, pad = 6;
+    const vals = points.map(p => p.value);
+    const minV = Math.min(...vals), maxV = Math.max(...vals);
+    const vRange = maxV - minV || 1;
+    const xs = points.map((_, i) => pad + (i / (points.length - 1)) * (W - pad * 2));
+    const ys = points.map(p => H - pad - ((p.value - minV) / vRange) * (H - pad * 2));
+    const d = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i]!.toFixed(1)}`).join(' ');
+    const fillD = `${d} L${xs[xs.length-1]!.toFixed(1)},${H} L${xs[0]!.toFixed(1)},${H} Z`;
+    const svg = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px">
+      <path d="${fillD}" fill="${colour}" opacity="0.15"/>
+      <path d="${d}" fill="none" stroke="${colour}" stroke-width="1.5" opacity="0.9"/>
+    </svg>`;
+    if (existingSvg) existingSvg.outerHTML = svg;
+    else el.insertAdjacentHTML('afterbegin', svg);
+    // Update labels row
+    const labelsRow = el.querySelector('div.flex.justify-between');
+    if (labelsRow) {
+      const spans = labelsRow.querySelectorAll('span');
+      if (spans.length >= 3) {
+        spans[0]!.textContent = fmtChartVal(minV) + suffix;
+        spans[1]!.textContent = fmtChartVal(vals[vals.length - 1]!) + suffix;
+        spans[2]!.textContent = fmtChartVal(maxV) + suffix;
+      }
+    }
+  }
+
   async function showHistory(type: 'item' | 'fluid' | 'chemical', id: string, row: HTMLElement, colour: string) {
     const existing = row.nextElementSibling;
     if (existing?.classList.contains('history-panel')) {
@@ -517,9 +586,13 @@ const totalChemicals = chemicals.reduce((sum, c) => sum + c.amount, 0);
     panel.innerHTML = `
       <div class="flex items-center gap-2 mb-2">
         <span class="font-mc text-[9px] text-mc-muted">RANGE:</span>
-        <button data-range="-1h" class="range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-diamond">1H</button>
-        <button data-range="-6h" class="range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">6H</button>
+        <button data-range="-1h"  class="range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-diamond">1H</button>
+        <button data-range="-6h"  class="range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">6H</button>
         <button data-range="-24h" class="range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">24H</button>
+        <button data-range="-7d"  class="range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">7D</button>
+        <button data-range="-14d" class="range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">14D</button>
+        <button data-range="-21d" class="range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">21D</button>
+        <button data-range="-31d" class="range-btn mc-slot px-2 py-0.5 font-mc text-[9px] text-mc-muted">31D</button>
         <span class="font-mc text-[9px] text-mc-muted ml-auto history-label">Loading...</span>
       </div>
       <div class="history-chart-container h-24 w-full"></div>`;
@@ -839,6 +912,26 @@ const totalChemicals = chemicals.reduce((sum, c) => sum + c.amount, 0);
     row.addEventListener('click', () => {
       const chemical = row.getAttribute('data-chemical');
       if (chemical) showHistory('chemical', chemical, row as HTMLElement, 'amethyst');
+    });
+  });
+
+  // Storage history range selector
+  document.querySelectorAll<HTMLButtonElement>('.storage-hist-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const range = btn.dataset.storageRange;
+      if (!range) return;
+      document.querySelectorAll<HTMLButtonElement>('.storage-hist-btn').forEach(b => {
+        const active = b.dataset.storageRange === range;
+        b.className = `storage-hist-btn font-mc text-sm px-3 py-1 pixel-border transition-colors ${active ? 'bg-mc-diamond/20 text-mc-diamond border-mc-diamond' : 'bg-mc-stone/40 text-mc-muted hover:text-mc-white'}`;
+      });
+      const loading = document.getElementById('storage-hist-loading');
+      if (loading) loading.classList.remove('hidden');
+      const data = await fetch(`/api/ae-summary?range=${range}`).then(r => r.json()).catch(() => null);
+      if (loading) loading.classList.add('hidden');
+      if (!data) return;
+      if (data.itemsHistory) renderSvgLine('chart-storage-items', data.itemsHistory, 'var(--color-mc-diamond)', '');
+      if (data.energyHistory) renderSvgLine('chart-storage-energy', data.energyHistory, 'var(--color-mc-amethyst)', ' FE/t');
+      if (data.storageHistory) renderSvgLine('chart-storage-fill', data.storageHistory, 'var(--color-mc-lapis)', ' slots');
     });
   });
 

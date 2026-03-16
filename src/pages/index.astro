@@ -6,32 +6,39 @@ import ProgressBar from '@/components/mc/ProgressBar.astro';
 import LineChart from '@/components/charts/LineChart.astro';
 import DualLineChart from '@/components/charts/DualLineChart.astro';
 import {
-  energySummary, energyFlow, energyHistory, energyFlowHistory,
-  aeSummary, aeCPUs, aeItems, aeItemVelocity,
+  energySummary, energyFlow, energyHistory, energyStoredHistory, energyFlowHistory, energyDevices,
+  aeSummary, aeCPUs, aeItems, aeItemVelocity, aeSummaryHistory,
   machineSummary, machineTypes, mekanismMachines, miMachines as fetchMiMachines,
   craftingJobs,
 } from '@/lib/queries';
 
 const [
-  energyRes, flowRes, eHistRes, fHistRes,
+  energyRes, flowRes, eHistRes, eStoredHistRes, fHistRes, devicesRes,
   aeRes, cpusRes, itemsRes, velocityRes,
+  aeItemsHistRes, aeEnergyHistRes, aeStorageHistRes,
   machSumRes, machTypesRes, mekRes, miRes,
   jobsRes,
 ] = await Promise.allSettled([
-  energySummary(), energyFlow(), energyHistory('-1h'), energyFlowHistory('-1h'),
+  energySummary(), energyFlow(), energyHistory('-1h'), energyStoredHistory('-1h'), energyFlowHistory('-1h'), energyDevices(),
   aeSummary(), aeCPUs(), aeItems(), aeItemVelocity('-30m', 15),
+  aeSummaryHistory('items_total', '-1h'), aeSummaryHistory('energy_usage', '-1h'), aeSummaryHistory('item_storage_used', '-1h'),
   machineSummary(), machineTypes(), mekanismMachines(), fetchMiMachines(),
   craftingJobs(),
 ]);
 
-const e       = energyRes.status    === 'fulfilled' ? energyRes.value    : null;
-const f       = flowRes.status      === 'fulfilled' ? flowRes.value      : [];
-const eHist   = eHistRes.status     === 'fulfilled' ? eHistRes.value     : [];
-const fHist   = fHistRes.status     === 'fulfilled' ? fHistRes.value     : [];
+const e          = energyRes.status        === 'fulfilled' ? energyRes.value        : null;
+const f          = flowRes.status          === 'fulfilled' ? flowRes.value          : [];
+const eHist      = eHistRes.status         === 'fulfilled' ? eHistRes.value         : [];
+const eStoredHist = eStoredHistRes.status  === 'fulfilled' ? eStoredHistRes.value   : [];
+const fHist      = fHistRes.status         === 'fulfilled' ? fHistRes.value         : [];
+const devices    = devicesRes.status       === 'fulfilled' ? devicesRes.value       : [];
 const a       = aeRes.status        === 'fulfilled' ? aeRes.value        : null;
 const cpus    = cpusRes.status      === 'fulfilled' ? cpusRes.value      : { total: 0, busy: 0, busy_percent: 0, cpus: [] };
 const items   = itemsRes.status     === 'fulfilled' ? itemsRes.value     : [];
 const velocity = velocityRes.status === 'fulfilled' ? velocityRes.value  : [];
+const aeItemsHist    = aeItemsHistRes.status   === 'fulfilled' ? aeItemsHistRes.value   : [];
+const aeEnergyHist   = aeEnergyHistRes.status  === 'fulfilled' ? aeEnergyHistRes.value  : [];
+const aeStorageHist  = aeStorageHistRes.status === 'fulfilled' ? aeStorageHistRes.value : [];
 const mSum    = machSumRes.status   === 'fulfilled' ? machSumRes.value   : null;
 const mekMachines = mekRes.status   === 'fulfilled' ? mekRes.value       : [];
 const miMachineList = miRes.status  === 'fulfilled' ? miRes.value        : [];
@@ -241,17 +248,53 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     </div>
 
     <!-- Energy charts -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
-      <Panel title="GENERATION VS CONSUMPTION" class="lg:col-span-2" raised>
+    <!-- Range selector -->
+    <div class="flex items-center gap-2 mb-3">
+      <span class="font-mc text-base text-mc-muted">RANGE:</span>
+      {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['21D','-21d'],['31D','-31d']].map(([label, val]) => (
+        <button data-energy-range={val}
+          class:list={['energy-range-btn font-mc text-sm px-3 py-1 pixel-border transition-colors',
+            val === '-1h' ? 'bg-mc-gold/20 text-mc-gold border-mc-gold' : 'bg-mc-stone/40 text-mc-muted hover:text-mc-white']}
+        >{label}</button>
+      ))}
+      <span id="energy-range-loading" class="font-mc text-sm text-mc-muted hidden">LOADING...</span>
+    </div>
+
+    <!-- Row 1: Gen vs Con (full width) -->
+    <div class="mb-3">
+      <Panel title="GENERATION VS CONSUMPTION" raised>
         <DualLineChart dataA={genHist} dataB={conHist}
           colourA="var(--color-mc-emerald)" colourB="var(--color-mc-redstone)"
           labelA="Generation" labelB="Consumption"
-          height={100} suffix=" FE/t" id="chart-gen-con" />
+          height={110} suffix=" FE/t" id="chart-gen-con" />
+      </Panel>
+    </div>
+
+    <!-- Row 2: FE stored + Storage % + Devices -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
+      <Panel title="ENERGY STORED (FE)" raised>
+        <LineChart data={eStoredHist} colour="var(--color-mc-copper)" height={90} suffix=" FE" id="chart-energy-stored" />
       </Panel>
       <Panel title="ENERGY STORAGE %" raised>
         <ProgressBar value={e?.percent ?? 0} colour="gold" showPercent label="Charge" id="progress-energy" />
         <div class="mt-3">
-          <LineChart data={eHist} colour="var(--color-mc-gold)" height={80} suffix="%" id="chart-energy-pct" />
+          <LineChart data={eHist} colour="var(--color-mc-gold)" height={70} suffix="%" id="chart-energy-pct" />
+        </div>
+      </Panel>
+      <Panel title="ENERGY DEVICES" raised>
+        <div id="devices-list" class="space-y-2">
+          {devices.length === 0 && <p class="font-mc text-base text-mc-muted">No device data</p>}
+          {devices.map(d => (
+            <div class="flex flex-col gap-1">
+              <div class="flex justify-between">
+                <span class="font-mc text-sm text-mc-white truncate max-w-[60%]">{d.name}</span>
+                <span class="font-mc text-sm text-mc-gold">{(d.percent ?? 0).toFixed(0)}%</span>
+              </div>
+              <div class="mc-progress-track">
+                <div class="mc-progress-fill bg-mc-gold" style={`width:${d.percent ?? 0}%`} />
+              </div>
+            </div>
+          ))}
         </div>
       </Panel>
     </div>
@@ -439,6 +482,29 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
         )}
       </div>
     )}
+
+    <!-- AE history charts -->
+    <div class="flex items-center gap-2 mb-3">
+      <span class="font-mc text-base text-mc-muted">RANGE:</span>
+      {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['21D','-21d'],['31D','-31d']].map(([label, val]) => (
+        <button data-ae-range={val}
+          class:list={['ae-range-btn font-mc text-sm px-3 py-1 pixel-border transition-colors',
+            val === '-1h' ? 'bg-mc-diamond/20 text-mc-diamond border-mc-diamond' : 'bg-mc-stone/40 text-mc-muted hover:text-mc-white']}
+        >{label}</button>
+      ))}
+      <span id="ae-range-loading" class="font-mc text-sm text-mc-muted hidden">LOADING...</span>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
+      <Panel title="TOTAL ITEMS STORED" raised>
+        <LineChart data={aeItemsHist} colour="var(--color-mc-diamond)" height={90} suffix="" id="chart-ae-items" />
+      </Panel>
+      <Panel title="AE ENERGY USAGE" raised>
+        <LineChart data={aeEnergyHist} colour="var(--color-mc-amethyst)" height={90} suffix=" FE/t" id="chart-ae-energy" />
+      </Panel>
+      <Panel title="STORAGE FILL" raised>
+        <LineChart data={aeStorageHist} colour="var(--color-mc-lapis)" height={90} suffix=" slots" id="chart-ae-storage" />
+      </Panel>
+    </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
       <div data-panel="producers">
@@ -1068,6 +1134,125 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     if (data.error) return;
     if (data.cpus) renderCrafting(data.cpus, data.jobs ?? []);
   }
+
+  // ── Energy range selector ─────────────────────────────────────────────────
+  function fmtChartVal(v: number): string {
+    const abs = Math.abs(v);
+    if (abs >= 1_000_000_000) return (v / 1_000_000_000).toFixed(1) + 'B';
+    if (abs >= 1_000_000) return (v / 1_000_000).toFixed(1) + 'M';
+    if (abs >= 1_000) return (v / 1_000).toFixed(1) + 'K';
+    return v.toFixed(1);
+  }
+
+  function renderSvgLine(containerId: string, points: {time:string;value:number}[], colour: string, suffix = '') {
+    const el = document.getElementById(containerId);
+    if (!el || points.length < 2) return;
+    const existingSvg = el.querySelector('svg');
+    const H = existingSvg ? (parseInt(existingSvg.getAttribute('height') ?? '') || parseInt((existingSvg as SVGElement).style?.height ?? '') || 90) : 90;
+    const W = 400, pad = 6;
+    const vals = points.map(p => p.value);
+    const minV = Math.min(...vals), maxV = Math.max(...vals);
+    const vRange = maxV - minV || 1;
+    const xs = points.map((_, i) => pad + (i / (points.length - 1)) * (W - pad * 2));
+    const ys = points.map(p => H - pad - ((p.value - minV) / vRange) * (H - pad * 2));
+    const d = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i]!.toFixed(1)}`).join(' ');
+    const fillD = `${d} L${xs[xs.length-1]!.toFixed(1)},${H} L${xs[0]!.toFixed(1)},${H} Z`;
+    const svg = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px">
+      <path d="${fillD}" fill="${colour}" opacity="0.15"/>
+      <path d="${d}" fill="none" stroke="${colour}" stroke-width="1.5" opacity="0.9"/>
+    </svg>`;
+    if (existingSvg) existingSvg.outerHTML = svg;
+    else el.insertAdjacentHTML('afterbegin', svg);
+    // Update labels row (LineChart renders flex row with min/current/max spans)
+    const labelsRow = el.querySelector('div.flex.justify-between');
+    if (labelsRow) {
+      const spans = labelsRow.querySelectorAll('span');
+      if (spans.length >= 3) {
+        spans[0]!.textContent = fmtChartVal(minV) + suffix;
+        spans[1]!.textContent = fmtChartVal(vals[vals.length - 1]!) + suffix;
+        spans[2]!.textContent = fmtChartVal(maxV) + suffix;
+      }
+    }
+  }
+
+  function renderDualSvg(containerId: string, ptsA: {time:string;value:number}[], ptsB: {time:string;value:number}[], colA: string, colB: string) {
+    const el = document.getElementById(containerId);
+    if (!el || ptsA.length < 2 || ptsB.length < 2) return;
+    const W = 400, H = 110, pad = 6;
+    const allVals = [...ptsA.map(p => p.value), ...ptsB.map(p => p.value)];
+    const min = Math.min(...allVals), max = Math.max(...allVals);
+    const range = max - min || 1;
+    const toPath = (pts: {time:string;value:number}[]) => {
+      const xs = pts.map((_, i) => pad + (i / (pts.length - 1)) * (W - pad * 2));
+      const ys = pts.map(p => H - pad - ((p.value - min) / range) * (H - pad * 2));
+      return xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i]!.toFixed(1)}`).join(' ');
+    };
+    const dA = toPath(ptsA), dB = toPath(ptsB);
+    const svg = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <path d="${dA}" fill="none" stroke="${colA}" stroke-width="1.5" opacity="0.9"/>
+      <path d="${dB}" fill="none" stroke="${colB}" stroke-width="1.5" opacity="0.9"/>
+    </svg>`;
+    const existing = el.querySelector('svg');
+    if (existing) existing.outerHTML = svg; else el.innerHTML = svg;
+  }
+
+  let energyRange = '-1h';
+  async function switchEnergyRange(range: string) {
+    energyRange = range;
+    const loading = document.getElementById('energy-range-loading');
+    if (loading) loading.classList.remove('hidden');
+    document.querySelectorAll<HTMLButtonElement>('.energy-range-btn').forEach(btn => {
+      const active = btn.dataset.energyRange === range;
+      btn.className = `energy-range-btn font-mc text-sm px-3 py-1 pixel-border transition-colors ${active ? 'bg-mc-gold/20 text-mc-gold border-mc-gold' : 'bg-mc-stone/40 text-mc-muted hover:text-mc-white'}`;
+    });
+    const data = await fetch(`/api/energy?range=${range}`).then(r => r.json()).catch(() => null);
+    if (loading) loading.classList.add('hidden');
+    if (!data) return;
+
+    // Gen vs Con
+    if (data.flowSeries) {
+      const names = Object.keys(data.flowSeries);
+      const ptsA = data.flowSeries[names[0]] ?? [];
+      const ptsB = data.flowSeries[names[1]] ?? ptsA;
+      renderDualSvg('chart-gen-con', ptsA, ptsB, 'var(--color-mc-emerald)', 'var(--color-mc-redstone)');
+    }
+    // FE stored
+    if (data.storedHistory) renderSvgLine('chart-energy-stored', data.storedHistory, 'var(--color-mc-copper)', ' FE');
+    // Storage %
+    if (data.pctHistory) renderSvgLine('chart-energy-pct', data.pctHistory, 'var(--color-mc-gold)', '%');
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('.energy-range-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const r = btn.dataset.energyRange;
+      if (r) switchEnergyRange(r);
+    });
+  });
+
+  // ── AE range selector ─────────────────────────────────────────────────────
+  let aeRange = '-1h';
+  async function switchAERange(range: string) {
+    aeRange = range;
+    const loading = document.getElementById('ae-range-loading');
+    if (loading) loading.classList.remove('hidden');
+    document.querySelectorAll<HTMLButtonElement>('.ae-range-btn').forEach(btn => {
+      const active = btn.dataset.aeRange === range;
+      btn.className = `ae-range-btn font-mc text-sm px-3 py-1 pixel-border transition-colors ${active ? 'bg-mc-diamond/20 text-mc-diamond border-mc-diamond' : 'bg-mc-stone/40 text-mc-muted hover:text-mc-white'}`;
+    });
+    const data = await fetch(`/api/ae-summary?range=${range}`).then(r => r.json()).catch(() => null);
+    if (loading) loading.classList.add('hidden');
+    if (!data) return;
+    if (data.itemsHistory) renderSvgLine('chart-ae-items', data.itemsHistory, 'var(--color-mc-diamond)');
+    if (data.energyHistory) renderSvgLine('chart-ae-energy', data.energyHistory, 'var(--color-mc-amethyst)', ' FE/t');
+    if (data.storageHistory) renderSvgLine('chart-ae-storage', data.storageHistory, 'var(--color-mc-lapis)', ' slots');
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('.ae-range-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const r = btn.dataset.aeRange;
+      if (r) switchAERange(r);
+    });
+  });
 
   // ── Kick off all loops ────────────────────────────────────────────────────
   setInterval(refreshOverview, OVERVIEW_MS);

@@ -1,14 +1,23 @@
 import type { APIRoute } from 'astro';
-import { aeSummary, aeCPUs } from '@/lib/queries';
+import { aeSummary, aeCPUs, aeSummaryHistory } from '@/lib/queries';
 
-export const GET: APIRoute = async () => {
+const VALID_RANGE = /^-\d+[smhd]$/;
+
+export const GET: APIRoute = async ({ request }) => {
   try {
-    const [summary, cpus] = await Promise.all([
+    const url = new URL(request.url);
+    const rawRange = url.searchParams.get('range');
+    const range = rawRange && VALID_RANGE.test(rawRange) ? rawRange : '-1h';
+
+    const [summary, cpus, itemsHistory, energyHistory, storageHistory] = await Promise.all([
       aeSummary(),
       aeCPUs(),
+      aeSummaryHistory('items_total', range),
+      aeSummaryHistory('energy_usage', range),
+      aeSummaryHistory('item_storage_used', range),
     ]);
 
-    return Response.json({ summary, cpus });
+    return Response.json({ summary, cpus, itemsHistory, energyHistory, storageHistory });
   } catch (err) {
     console.error('ae-summary API error', err);
     return Response.json(
