@@ -156,11 +156,13 @@ from(bucket: "${INFLUX_BUCKET}")
     .map(r => {
       const name = String(r.name ?? '');
       const slot = slotMap.get(name);
+      const inferredActive = (r.inferred_active as number) > 0;
+      const slotActive = (slot?.occupied ?? 0) > 0;
       return {
         name,
         type: String(r.type ?? ''),
         node: String(r.node ?? ''),
-        active: (r.inferred_active as number) > 0,
+        active: inferredActive || slotActive,
         energy_percent: (r.energy_percent as number) ?? 0,
         occupied_slots: slot?.occupied,
         total_slots: slot?.total,
