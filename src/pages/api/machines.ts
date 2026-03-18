@@ -27,20 +27,30 @@ export const GET: APIRoute = async ({ request }) => {
       return Response.json({ history });
     }
 
-    const [summary, types, mekanism, mi, activityHistory, activityPctHistory, slotItems, fluids, mekHistory, miHistory] = await Promise.all([
+    const historyOnly = url.searchParams.get('history') === '1';
+
+    if (historyOnly) {
+      // Slow path: range queries only — called separately after grid renders
+      const [activityHistory, activityPctHistory, mekHistory, miHistory] = await Promise.all([
+        machineActivityHistory(range),
+        machineActivePercentHistory(range),
+        modActivityHistory('mekanism', range),
+        modActivityHistory('modern_industrialization', range),
+      ]);
+      return Response.json({ activityHistory, activityPctHistory, mekHistory, miHistory });
+    }
+
+    // Fast path: current-state queries only (last() — no range scan)
+    const [summary, types, mekanism, mi, slotItems, fluids] = await Promise.all([
       machineSummary(),
       machineTypes(),
       mekanismMachines(),
       miMachines(),
-      machineActivityHistory(range),
-      machineActivePercentHistory(range),
       miMachineSlotItems(),
       miMachineFluids(),
-      modActivityHistory('mekanism', range),
-      modActivityHistory('modern_industrialization', range),
     ]);
 
-    return Response.json({ summary, types, mekanism, mi, activityHistory, activityPctHistory, slotItems, fluids, mekHistory, miHistory });
+    return Response.json({ summary, types, mekanism, mi, slotItems, fluids });
   } catch (err) {
     console.error('machines API error', err);
     return Response.json(

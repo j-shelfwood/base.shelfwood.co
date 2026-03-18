@@ -1047,6 +1047,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   }
 
   async function refreshMachines() {
+    // Fast path: current-state grids load immediately
     const data = await fetch(`/api/machines?range=${globalRange}`).then(r => r.json());
     if (data.error) return;
     if (data.summary) {
@@ -1056,10 +1057,13 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     }
     if (data.mekanism) renderMachineGrid('mek-grid', data.mekanism, buildMekCell, mColour, fmtType);
     if (data.mi) renderMachineGrid('mi-grid', data.mi, buildMICell, (t) => miColour(t.replace('modern_industrialization:', '').replace(/_/g, ' ')), (t) => t.replace('modern_industrialization:', '').replace(/_/g, ' '));
-    if (data.activityHistory)    renderChart('chart-mach-activity',  [{ points: data.activityHistory, colour: 'var(--color-mc-emerald)', fill: true }]);
-    if (data.activityPctHistory) renderChart('chart-mach-active-pct', [{ points: data.activityPctHistory, colour: 'var(--color-mc-gold)', fill: true, suffix: '%' }]);
-    if (data.mekHistory) renderChart('chart-mek-history', [{ points: data.mekHistory, colour: 'var(--color-mc-amethyst)', fill: true }]);
-    if (data.miHistory)  renderChart('chart-mi-history',  [{ points: data.miHistory, colour: 'var(--color-mc-diamond)', fill: true }]);
+    // Slow path: history charts load separately so grids never wait on range scans
+    fetch(`/api/machines?range=${globalRange}&history=1`).then(r => r.json()).then(h => {
+      if (h.activityHistory)    renderChart('chart-mach-activity',  [{ points: h.activityHistory, colour: 'var(--color-mc-emerald)', fill: true }]);
+      if (h.activityPctHistory) renderChart('chart-mach-active-pct', [{ points: h.activityPctHistory, colour: 'var(--color-mc-gold)', fill: true, suffix: '%' }]);
+      if (h.mekHistory) renderChart('chart-mek-history', [{ points: h.mekHistory, colour: 'var(--color-mc-amethyst)', fill: true }]);
+      if (h.miHistory)  renderChart('chart-mi-history',  [{ points: h.miHistory, colour: 'var(--color-mc-diamond)', fill: true }]);
+    }).catch(() => {});
   }
 
   // ── Storage refresh ────────────────────────────────────────────────────────
@@ -1506,7 +1510,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     );
 
     if (sectionLoaded.has('machines')) tasks.push(
-      fetch(`/api/machines?range=${range}`).then(r => r.json()).then(mData => {
+      fetch(`/api/machines?range=${range}&history=1`).then(r => r.json()).then(mData => {
         if (mData?.activityHistory)    renderChart('chart-mach-activity',   [{ points: mData.activityHistory,    colour: 'var(--color-mc-emerald)',  fill: true }]);
         if (mData?.activityPctHistory) renderChart('chart-mach-active-pct', [{ points: mData.activityPctHistory, colour: 'var(--color-mc-gold)',     fill: true, suffix: '%' }]);
         if (mData?.mekHistory)         renderChart('chart-mek-history',      [{ points: mData.mekHistory,         colour: 'var(--color-mc-amethyst)', fill: true }]);
