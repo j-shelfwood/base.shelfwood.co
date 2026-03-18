@@ -489,6 +489,12 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
                             <span class="font-mc text-xs text-mc-diamond">{m.occupied_slots}/{m.total_slots}</span>
                           </div>
                         )}
+                        {(m.input_display || m.input_item) && (
+                          <div class="flex items-center gap-1 mt-0.5">
+                            <span class="font-mc text-xs text-mc-white w-12">INPUT</span>
+                            <span class="font-mc text-xs text-mc-emerald truncate">{m.input_display ?? m.input_item?.split(':')[1]?.replace(/_/g, ' ') ?? ''}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -963,7 +969,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   }
 
   type MekM = { name: string; type: string; active: boolean; energy_percent: number; progress_percent: number; progress_total: number };
-  type MIM  = { name: string; type: string; active: boolean; energy_percent: number; occupied_slots?: number; total_slots?: number };
+  type MIM  = { name: string; type: string; active: boolean; energy_percent: number; occupied_slots?: number; total_slots?: number; input_item?: string; input_display?: string };
 
   function buildMekCell(m: MekM, col: string, idx: number): string {
     const pctE = Math.min(100, m.energy_percent);
@@ -995,6 +1001,8 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       : `<span class="font-mc text-xs z-10 ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>`;
     const energyRow = !isSteam ? `<div class="flex items-center gap-1 mt-0.5"><span class="font-mc text-xs text-mc-gold w-12">ENERGY</span><div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-gold" style="width:${barPct}%"></div></div><span class="font-mc text-xs text-mc-gold">${barPct.toFixed(0)}%</span></div>` : '';
     const slotsRow = m.occupied_slots != null && m.total_slots != null ? `<div class="flex items-center gap-1"><span class="font-mc text-xs text-mc-diamond w-12">SLOTS</span><div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-diamond" style="width:${slotPct}%"></div></div><span class="font-mc text-xs text-mc-diamond">${m.occupied_slots}/${m.total_slots}</span></div>` : '';
+    const inputLabel = m.input_display ?? m.input_item?.split(':')[1]?.replace(/_/g, ' ') ?? '';
+    const inputRow = inputLabel ? `<div class="flex items-center gap-1 mt-0.5"><span class="font-mc text-xs text-mc-white w-12">INPUT</span><span class="font-mc text-xs text-mc-emerald truncate">${inputLabel}</span></div>` : '';
     return `${m.active ? `<div class="absolute inset-0 animate-pulse opacity-10 bg-mc-${col} pointer-events-none"></div>` : ''}
       <span class="font-mc text-xs z-10 ${m.active ? `text-mc-${col}` : 'text-mc-muted'}">#${idx + 1}</span>
       <span class="w-2 h-2 z-10 ${m.active ? `bg-mc-emerald shadow-[0_0_6px_var(--color-mc-emerald)]` : 'bg-mc-stone'}"></span>
@@ -1003,7 +1011,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:flex flex-col gap-1 bg-mc-obsidian pixel-border p-2 min-w-40 pointer-events-none">
         <span class="font-mc text-sm text-mc-white capitalize">${m.name.replace(/_/g, ' ')}</span>
         <span class="font-mc text-sm ${m.active ? 'text-mc-emerald' : 'text-mc-muted'}">${m.active ? 'ACTIVE' : 'IDLE'}</span>
-        ${energyRow}${slotsRow}
+        ${energyRow}${slotsRow}${inputRow}
       </div>`;
   }
 

@@ -119,10 +119,12 @@ export interface MIMachine {
   energy_percent: number;
   occupied_slots?: number;
   total_slots?: number;
+  input_item?: string;
+  input_display?: string;
 }
 
 export async function miMachines(): Promise<MIMachine[]> {
-  const [activityRows, slotRows] = await Promise.all([
+  const [activityRows, slotRows, inputRows] = await Promise.all([
     queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
   |> range(start: -24h)
@@ -141,6 +143,15 @@ from(bucket: "${INFLUX_BUCKET}")
   |> group()
   |> pivot(rowKey: ["_time", "name", "type", "node"], columnKey: ["_field"], valueColumn: "_value")
 `),
+    queryFlux(`
+from(bucket: "${INFLUX_BUCKET}")
+  |> range(start: -24h)
+  |> filter(fn: (r) => r._measurement == "mi_machine_input")
+  |> group(columns: ["name", "type", "node", "_field"])
+  |> last()
+  |> group()
+  |> pivot(rowKey: ["_time", "name", "type", "node", "item"], columnKey: ["_field"], valueColumn: "_value")
+`),
   ]);
 
   const slotMap = new Map<string, { occupied: number; total: number }>();
@@ -152,10 +163,20 @@ from(bucket: "${INFLUX_BUCKET}")
     });
   }
 
+  const inputMap = new Map<string, { item: string; display?: string }>();
+  for (const r of inputRows) {
+    const name = String(r.name ?? '');
+    inputMap.set(name, {
+      item: String(r.item ?? ''),
+      display: r.display_name ? String(r.display_name) : undefined,
+    });
+  }
+
   return activityRows
     .map(r => {
       const name = String(r.name ?? '');
       const slot = slotMap.get(name);
+      const input = inputMap.get(name);
       const inferredActive = (r.inferred_active as number) > 0;
       const slotActive = (slot?.occupied ?? 0) > 0;
       return {
@@ -166,6 +187,8 @@ from(bucket: "${INFLUX_BUCKET}")
         energy_percent: (r.energy_percent as number) ?? 0,
         occupied_slots: slot?.occupied,
         total_slots: slot?.total,
+        input_item: input?.item,
+        input_display: input?.display,
       };
     })
     .sort((a, b) => Number(b.active) - Number(a.active) || a.type.localeCompare(b.type));
