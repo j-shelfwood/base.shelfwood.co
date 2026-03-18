@@ -34,12 +34,25 @@ export function rangeToWindow(range: string): string {
  * -30d and returns the tail of that result matching the original point count,
  * so charts always show the last known data instead of "NO DATA".
  */
+/** Parse range string to total minutes, returns null if unparseable */
+function rangeToMinutes(range: string): number | null {
+  const match = range.match(/^-(\d+)([smhd])$/);
+  if (!match) return null;
+  const n = parseInt(match[1]!);
+  const unit = match[2];
+  return unit === 's' ? n / 60 : unit === 'm' ? n : unit === 'h' ? n * 60 : n * 1440;
+}
+
 export async function withHistoryFallback(
   queryFn: (range: string) => Promise<TimePoint[]>,
   range: string
 ): Promise<TimePoint[]> {
   const result = await queryFn(range);
   if (result.length > 0) return result;
+  // Skip fallback when original range is already wide (≥ 7 days) to avoid
+  // doubling expensive long-range queries that may OOM InfluxDB.
+  const minutes = rangeToMinutes(range);
+  if (minutes !== null && minutes >= 7 * 1440) return result;
   // Retry with a wide window to find any recent data
   const fallback = await queryFn('-30d');
   return fallback;

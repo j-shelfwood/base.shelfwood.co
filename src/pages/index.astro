@@ -1328,7 +1328,11 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
 
     const svg = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px">${paths}</svg>`;
     if (existingSvg) existingSvg.outerHTML = svg;
-    else el.insertAdjacentHTML('afterbegin', svg);
+    else {
+      // Remove SSR "NO DATA" fallback before inserting chart
+      el.querySelector('[data-no-data]')?.remove();
+      el.insertAdjacentHTML('afterbegin', svg);
+    }
 
     // Update labels row if present (min / current / max)
     const labelsRow = el.querySelector('div.flex.justify-between');
