@@ -831,6 +831,17 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   // ── Global chart range (shared across all sections) ────────────────────────
   let globalRange = '-1h';
 
+  // Safe fetch — returns null on non-2xx or network error instead of throwing
+  async function fetchJSON<T>(url: string): Promise<T | null> {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) return null;
+      return await r.json() as T;
+    } catch {
+      return null;
+    }
+  }
+
   // ── Shared helpers ─────────────────────────────────────────────────────────
   function setEl(id: string, val: string) {
     const el = document.getElementById(id);
@@ -868,9 +879,9 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
 
   async function refreshOverview() {
     const [eRes, aeRes, mRes] = await Promise.all([
-      fetch('/api/energy').then(r => r.json()),
-      fetch('/api/ae-summary').then(r => r.json()),
-      fetch('/api/machines').then(r => r.json()),
+      fetchJSON('/api/energy'),
+      fetchJSON('/api/ae-summary'),
+      fetchJSON('/api/machines'),
     ]);
     if (eRes.summary) {
       const s = eRes.summary;
@@ -1048,7 +1059,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
 
   async function refreshMachines() {
     // Fast path: current-state grids load immediately
-    const data = await fetch(`/api/machines?range=${globalRange}`).then(r => r.json());
+    const data = await fetchJSON<any>(`/api/machines?range=${globalRange}`);
     if (data.error) return;
     if (data.summary) {
       setEl('stat-mach-active', String(data.summary.active_machines));
@@ -1058,7 +1069,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     if (data.mekanism) renderMachineGrid('mek-grid', data.mekanism, buildMekCell, mColour, fmtType);
     if (data.mi) renderMachineGrid('mi-grid', data.mi, buildMICell, (t) => miColour(t.replace('modern_industrialization:', '').replace(/_/g, ' ')), (t) => t.replace('modern_industrialization:', '').replace(/_/g, ' '));
     // Slow path: history charts load separately so grids never wait on range scans
-    fetch(`/api/machines?range=${globalRange}&history=1`).then(r => r.json()).then(h => {
+    fetchJSON<any>(`/api/machines?range=${globalRange}&history=1`).then(h => {
       if (h.activityHistory)    renderChart('chart-mach-activity',  [{ points: h.activityHistory, colour: 'var(--color-mc-emerald)', fill: true }]);
       if (h.activityPctHistory) renderChart('chart-mach-active-pct', [{ points: h.activityPctHistory, colour: 'var(--color-mc-gold)', fill: true, suffix: '%' }]);
       if (h.mekHistory) renderChart('chart-mek-history', [{ points: h.mekHistory, colour: 'var(--color-mc-amethyst)', fill: true }]);
@@ -1144,8 +1155,8 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
 
   async function loadItems(q?: string) {
     const url = q ? `/api/ae-items?q=${encodeURIComponent(q)}` : '/api/ae-items';
-    const data = await fetch(url).then(r => r.json());
-    if (data.items) {
+    const data = await fetchJSON<any>(url);
+    if (data?.items) {
       if (!q) allItems = data.items;
       renderTopItems(q ? allItems : data.items);
       if (browserOpen) renderBrowserItems(data.items);
@@ -1169,7 +1180,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   }
 
   async function loadVelocity() {
-    const data = await fetch('/api/ae-items?velocity=1').then(r => r.json()).catch(() => null);
+    const data = await fetchJSON<any>('/api/ae-items?velocity=1');
     if (!data?.velocity) return;
     renderVelocity('[data-panel="producers"]', data.velocity, 1, 'text-mc-emerald', 'No production detected');
     renderVelocity('[data-panel="consumers"]', data.velocity, -1, 'text-mc-redstone', 'No consumption detected');
@@ -1269,7 +1280,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   }
 
   async function refreshCrafting() {
-    const data = await fetch(`/api/crafting?range=${globalRange}`).then(r => r.json());
+    const data = await fetchJSON<any>(`/api/crafting?range=${globalRange}`);
     if (data.error) return;
     if (data.cpus) renderCrafting(data.cpus, data.jobs ?? []);
     if (data.taskHistory) renderChart('chart-task-queue', [{ points: data.taskHistory, colour: 'var(--color-mc-gold)', fill: true }]);
@@ -1384,7 +1395,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       sparkContainer.classList.remove('hidden');
       if (sparkContainer.querySelector('svg')) return; // already loaded
       sparkContainer.innerHTML = '<span class="font-mc text-xs text-mc-muted">loading...</span>';
-      const data = await fetch(`/api/energy-storage?history=${encodeURIComponent(name)}&range=-1h`).then(r => r.json()).catch(() => null);
+      const data = await fetchJSON<any>(`/api/energy-storage?history=${encodeURIComponent(name)}&range=-1h`);
       if (data?.history) renderMiniLine(sparkContainer, data.history, 'var(--color-mc-gold)');
     });
   });
@@ -1440,7 +1451,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
 
   // Energy charts: visible near top, load right away with small delay
   sectionVisible('energy',   async () => {
-    const data = await fetch(`/api/energy?range=${globalRange}`).then(r => r.json()).catch(() => null);
+    const data = await fetchJSON<any>(`/api/energy?range=${globalRange}`);
     if (!data) return;
     if (data.flowSeries) {
       const names = Object.keys(data.flowSeries);
@@ -1457,7 +1468,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   // Storage section
   sectionVisible('storage', async () => {
     await Promise.all([loadItems(), loadVelocity()]);
-    const data = await fetch(`/api/ae-summary?range=${globalRange}`).then(r => r.json()).catch(() => null);
+    const data = await fetchJSON<any>(`/api/ae-summary?range=${globalRange}`);
     if (!data) return;
     if (data.itemsHistory)     renderChart('chart-ae-items',     [{ points: data.itemsHistory,     colour: 'var(--color-mc-diamond)',  fill: true }]);
     if (data.fluidsHistory)    renderChart('chart-ae-fluids',    [{ points: data.fluidsHistory,    colour: 'var(--color-mc-lapis)',    fill: true, suffix: ' mB'    }]);
@@ -1485,7 +1496,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     const tasks: Promise<void>[] = [];
 
     if (sectionLoaded.has('energy')) tasks.push(
-      fetch(`/api/energy?range=${range}`).then(r => r.json()).then(eData => {
+      fetchJSON<any>(`/api/energy?range=${range}`).then(eData => {
         if (eData?.flowSeries) {
           const names = Object.keys(eData.flowSeries);
           renderChart('chart-gen-con', [
@@ -1500,7 +1511,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     );
 
     if (sectionLoaded.has('storage')) tasks.push(
-      fetch(`/api/ae-summary?range=${range}`).then(r => r.json()).then(aeData => {
+      fetchJSON<any>(`/api/ae-summary?range=${range}`).then(aeData => {
         if (aeData?.itemsHistory)     renderChart('chart-ae-items',     [{ points: aeData.itemsHistory,     colour: 'var(--color-mc-diamond)',  fill: true }]);
         if (aeData?.fluidsHistory)    renderChart('chart-ae-fluids',    [{ points: aeData.fluidsHistory,    colour: 'var(--color-mc-lapis)',    fill: true, suffix: ' mB'    }]);
         if (aeData?.chemicalsHistory) renderChart('chart-ae-chemicals', [{ points: aeData.chemicalsHistory, colour: 'var(--color-mc-emerald)', fill: true }]);
@@ -1510,7 +1521,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     );
 
     if (sectionLoaded.has('machines')) tasks.push(
-      fetch(`/api/machines?range=${range}&history=1`).then(r => r.json()).then(mData => {
+      fetchJSON<any>(`/api/machines?range=${range}&history=1`).then(mData => {
         if (mData?.activityHistory)    renderChart('chart-mach-activity',   [{ points: mData.activityHistory,    colour: 'var(--color-mc-emerald)',  fill: true }]);
         if (mData?.activityPctHistory) renderChart('chart-mach-active-pct', [{ points: mData.activityPctHistory, colour: 'var(--color-mc-gold)',     fill: true, suffix: '%' }]);
         if (mData?.mekHistory)         renderChart('chart-mek-history',      [{ points: mData.mekHistory,         colour: 'var(--color-mc-amethyst)', fill: true }]);
@@ -1519,7 +1530,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     );
 
     if (sectionLoaded.has('crafting')) tasks.push(
-      fetch(`/api/crafting?range=${range}`).then(r => r.json()).then(cData => {
+      fetchJSON<any>(`/api/crafting?range=${range}`).then(cData => {
         if (cData?.taskHistory) renderChart('chart-task-queue', [{ points: cData.taskHistory, colour: 'var(--color-mc-gold)',     fill: true }]);
         if (cData?.cpuHistory)  renderChart('chart-cpu-util',   [{ points: cData.cpuHistory,  colour: 'var(--color-mc-amethyst)', fill: true, suffix: '%' }]);
       }).catch(() => undefined)
