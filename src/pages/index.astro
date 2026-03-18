@@ -6,60 +6,55 @@ import ProgressBar from '@/components/mc/ProgressBar.astro';
 import LineChart from '@/components/charts/LineChart.astro';
 import DualLineChart from '@/components/charts/DualLineChart.astro';
 import {
-  energySummary, energyFlow, energyHistory, energyStoredHistory, energyFlowHistory, energyDevices, energyNetHistory,
-  aeSummary, aeCPUs, aeItems, aeItemVelocity, aeSummaryHistory,
-  machineSummary, machineTypes, mekanismMachines, miMachines as fetchMiMachines,
-  machineActivityHistory, machineActivePercentHistory, modActivityHistory,
-  craftingJobs, craftingTaskHistory, craftingCpuHistory,
+  energySummary, energyFlow, energyDevices,
+  aeSummary, aeCPUs,
+  machineSummary,
+  craftingJobs,
 } from '@/lib/queries';
 
+// SSR: only fetch fast summary/current-state queries (~8 total).
+// All history charts load client-side via lazy intersection observer.
 const [
-  energyRes, flowRes, eHistRes, eStoredHistRes, fHistRes, devicesRes, eNetHistRes,
-  aeRes, cpusRes, itemsRes, velocityRes,
-  aeItemsHistRes, aeEnergyHistRes, aeStorageHistRes, aeFluidsHistRes, aeChemicalsHistRes,
-  aeVelocity6hRes,
-  machSumRes, machTypesRes, mekRes, miRes,
-  machActivityRes, machActivityPctRes, mekHistRes, miHistRes,
-  jobsRes, taskHistRes, cpuHistRes,
+  energyRes, flowRes, devicesRes,
+  aeRes, cpusRes,
+  machSumRes,
+  jobsRes,
 ] = await Promise.allSettled([
-  energySummary(), energyFlow(), energyHistory('-1h'), energyStoredHistory('-1h'), energyFlowHistory('-1h'), energyDevices(), energyNetHistory('-1h'),
-  aeSummary(), aeCPUs(), aeItems(), aeItemVelocity('-30m', 15),
-  aeSummaryHistory('items_total', '-1h'), aeSummaryHistory('energy_usage', '-1h'), aeSummaryHistory('item_storage_used', '-1h'),
-  aeSummaryHistory('fluids_total', '-1h'), aeSummaryHistory('chemicals_total', '-1h'),
-  aeItemVelocity('-6h', 10),
-  machineSummary(), machineTypes(), mekanismMachines(), fetchMiMachines(),
-  machineActivityHistory('-1h'), machineActivePercentHistory('-1h'),
-  modActivityHistory('mekanism', '-1h'), modActivityHistory('modern_industrialization', '-1h'),
-  craftingJobs(), craftingTaskHistory('-1h'), craftingCpuHistory('-1h'),
+  energySummary(), energyFlow(), energyDevices(),
+  aeSummary(), aeCPUs(),
+  machineSummary(),
+  craftingJobs(),
 ]);
 
-const e          = energyRes.status        === 'fulfilled' ? energyRes.value        : null;
-const f          = flowRes.status          === 'fulfilled' ? flowRes.value          : [];
-const eHist      = eHistRes.status         === 'fulfilled' ? eHistRes.value         : [];
-const eStoredHist = eStoredHistRes.status  === 'fulfilled' ? eStoredHistRes.value   : [];
-const fHist      = fHistRes.status         === 'fulfilled' ? fHistRes.value         : [];
-const devices    = devicesRes.status       === 'fulfilled' ? devicesRes.value       : [];
-const eNetHist   = eNetHistRes.status      === 'fulfilled' ? eNetHistRes.value      : [];
-const a       = aeRes.status        === 'fulfilled' ? aeRes.value        : null;
-const cpus    = cpusRes.status      === 'fulfilled' ? cpusRes.value      : { total: 0, busy: 0, busy_percent: 0, cpus: [] };
-const items   = itemsRes.status     === 'fulfilled' ? itemsRes.value     : [];
-const velocity = velocityRes.status === 'fulfilled' ? velocityRes.value  : [];
-const aeItemsHist    = aeItemsHistRes.status     === 'fulfilled' ? aeItemsHistRes.value     : [];
-const aeEnergyHist   = aeEnergyHistRes.status    === 'fulfilled' ? aeEnergyHistRes.value    : [];
-const aeStorageHist  = aeStorageHistRes.status   === 'fulfilled' ? aeStorageHistRes.value   : [];
-const aeFluidsHist   = aeFluidsHistRes.status    === 'fulfilled' ? aeFluidsHistRes.value    : [];
-const aeChemicalsHist = aeChemicalsHistRes.status === 'fulfilled' ? aeChemicalsHistRes.value : [];
-const aeVelocity6h   = aeVelocity6hRes.status    === 'fulfilled' ? aeVelocity6hRes.value    : [];
-const mSum           = machSumRes.status         === 'fulfilled' ? machSumRes.value         : null;
-const mekMachines    = mekRes.status             === 'fulfilled' ? mekRes.value             : [];
-const miMachineList  = miRes.status              === 'fulfilled' ? miRes.value              : [];
-const machActivity   = machActivityRes.status    === 'fulfilled' ? machActivityRes.value    : [];
-const machActivityPct = machActivityPctRes.status === 'fulfilled' ? machActivityPctRes.value : [];
-const mekHistory     = mekHistRes.status         === 'fulfilled' ? mekHistRes.value         : [];
-const miHistory      = miHistRes.status          === 'fulfilled' ? miHistRes.value          : [];
-const jobs           = jobsRes.status            === 'fulfilled' ? jobsRes.value            : [];
-const taskHistory    = taskHistRes.status        === 'fulfilled' ? taskHistRes.value        : [];
-const cpuHistory     = cpuHistRes.status         === 'fulfilled' ? cpuHistRes.value         : [];
+const e       = energyRes.status  === 'fulfilled' ? energyRes.value  : null;
+const f       = flowRes.status    === 'fulfilled' ? flowRes.value    : [];
+const devices = devicesRes.status === 'fulfilled' ? devicesRes.value : [];
+const a       = aeRes.status      === 'fulfilled' ? aeRes.value      : null;
+const cpus    = cpusRes.status    === 'fulfilled' ? cpusRes.value    : { total: 0, busy: 0, busy_percent: 0, cpus: [] };
+const mSum    = machSumRes.status === 'fulfilled' ? machSumRes.value : null;
+const jobs    = jobsRes.status    === 'fulfilled' ? jobsRes.value    : [];
+
+// These are loaded client-side; provide empty defaults for SSR template
+const eHist: {time:string;value:number}[]       = [];
+const eStoredHist: {time:string;value:number}[] = [];
+const eNetHist: {time:string;value:number}[]    = [];
+const fHist: {time:string;value:number;name:string}[] = [];
+const aeItemsHist: {time:string;value:number}[]    = [];
+const aeEnergyHist: {time:string;value:number}[]   = [];
+const aeStorageHist: {time:string;value:number}[]  = [];
+const aeFluidsHist: {time:string;value:number}[]   = [];
+const aeChemicalsHist: {time:string;value:number}[] = [];
+const aeVelocity6h: {item:string;delta:number;first:number;last:number}[] = [];
+const mekMachines:   {name:string;type:string;active:boolean;energy_percent:number;progress_percent:number;progress_total:number}[] = [];
+const miMachineList: {name:string;type:string;node:string;active:boolean;energy_percent:number;occupied_slots?:number;total_slots?:number;input_item?:string;input_display?:string}[] = [];
+const machActivity: {time:string;value:number}[]    = [];
+const machActivityPct: {time:string;value:number}[] = [];
+const mekHistory: {time:string;value:number}[]      = [];
+const miHistory: {time:string;value:number}[]       = [];
+const taskHistory: {time:string;value:number}[] = [];
+const cpuHistory: {time:string;value:number}[]  = [];
+const items: {item:string;count:number}[]        = [];
+const velocity: {item:string;delta:number;first:number;last:number}[] = [];
 
 // ── Energy helpers ─────────────────────────────────────────────────────────
 const flowNames = [...new Set(fHist.map(r => r.name))];
@@ -84,12 +79,9 @@ const etaLabel = e ? (netFlow > 0 ? 'Full in' : 'Empty in') : '—';
 const etaValue = e ? energyEta(e.stored_fe, e.capacity_fe, netFlow) : '—';
 
 // ── Machines helpers ────────────────────────────────────────────────────────
-const mekByType = mekMachines.reduce<Record<string, typeof mekMachines>>((acc, m) => {
-  (acc[m.type] ??= []).push(m); return acc;
-}, {});
-const miByType = miMachineList.reduce<Record<string, typeof miMachineList>>((acc, m) => {
-  (acc[m.type] ??= []).push(m); return acc;
-}, {});
+// mekMachines and miMachineList are empty on SSR; grids populate client-side.
+const mekByType: Record<string, typeof mekMachines> = {};
+const miByType: Record<string, typeof miMachineList> = {};
 
 const typeColour: Record<string, string> = {
   enrichment_chamber: 'copper', crusher: 'copper', purification_chamber: 'copper',
@@ -266,7 +258,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
 
     <!-- Energy charts -->
     <!-- Range selector -->
-    <div class="flex items-center gap-2 mb-3">
+    <div id="energy" class="flex items-center gap-2 mb-3">
       <span class="font-mc text-base text-mc-muted">RANGE:</span>
       {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['21D','-21d'],['31D','-31d']].map(([label, val]) => (
         <button data-range={val}
@@ -614,7 +606,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       </div>
     </Panel>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <div id="storage-velocity" class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
       <div data-panel="producers">
         <Panel title="TOP PRODUCERS · 30m" raised noPadding>
           <div class="divide-y divide-mc-cobble/50">
@@ -1399,72 +1391,128 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     });
   }
 
-  async function switchRange(range: string) {
-    globalRange = range;
-    updateRangeBtnStyles(range);
-
-    const loading = document.getElementById('range-loading');
-    if (loading) loading.classList.remove('hidden');
-
-    const [eData, aeData, mData, cData] = await Promise.all([
-      fetch(`/api/energy?range=${range}`).then(r => r.json()).catch(() => null),
-      fetch(`/api/ae-summary?range=${range}`).then(r => r.json()).catch(() => null),
-      fetch(`/api/machines?range=${range}`).then(r => r.json()).catch(() => null),
-      fetch(`/api/crafting?range=${range}`).then(r => r.json()).catch(() => null),
-    ]);
-
-    if (loading) loading.classList.add('hidden');
-
-    // Energy charts
-    if (eData?.flowSeries) {
-      const names = Object.keys(eData.flowSeries);
-      const ptsA = eData.flowSeries[names[0]] ?? [];
-      const ptsB = eData.flowSeries[names[1]] ?? ptsA;
-      renderChart('chart-gen-con', [
-        { points: ptsA, colour: 'var(--color-mc-emerald)', fill: false },
-        { points: ptsB, colour: 'var(--color-mc-redstone)', fill: false },
-      ], { height: 110 });
-    }
-    if (eData?.netHistory)    renderChart('chart-energy-net',    [{ points: eData.netHistory,    colour: 'var(--color-mc-emerald)', fill: true, suffix: ' FE/t' }]);
-    if (eData?.storedHistory) renderChart('chart-energy-stored', [{ points: eData.storedHistory, colour: 'var(--color-mc-copper)',  fill: true, suffix: ' FE'   }]);
-    if (eData?.pctHistory)    renderChart('chart-energy-pct',    [{ points: eData.pctHistory,    colour: 'var(--color-mc-gold)',    fill: true, suffix: '%'     }]);
-
-    // AE charts
-    if (aeData?.itemsHistory)     renderChart('chart-ae-items',     [{ points: aeData.itemsHistory,     colour: 'var(--color-mc-diamond)',  fill: true }]);
-    if (aeData?.fluidsHistory)    renderChart('chart-ae-fluids',    [{ points: aeData.fluidsHistory,    colour: 'var(--color-mc-lapis)',    fill: true, suffix: ' mB'    }]);
-    if (aeData?.chemicalsHistory) renderChart('chart-ae-chemicals', [{ points: aeData.chemicalsHistory, colour: 'var(--color-mc-emerald)', fill: true }]);
-    if (aeData?.energyHistory)    renderChart('chart-ae-energy',    [{ points: aeData.energyHistory,    colour: 'var(--color-mc-amethyst)', fill: true, suffix: ' FE/t' }]);
-    if (aeData?.storageHistory)   renderChart('chart-ae-storage',   [{ points: aeData.storageHistory,   colour: 'var(--color-mc-lapis)',    fill: true, suffix: ' slots' }]);
-
-    // Machine charts
-    if (mData?.activityHistory)    renderChart('chart-mach-activity',   [{ points: mData.activityHistory,    colour: 'var(--color-mc-emerald)',  fill: true }]);
-    if (mData?.activityPctHistory) renderChart('chart-mach-active-pct', [{ points: mData.activityPctHistory, colour: 'var(--color-mc-gold)',     fill: true, suffix: '%' }]);
-    if (mData?.mekHistory)         renderChart('chart-mek-history',      [{ points: mData.mekHistory,         colour: 'var(--color-mc-amethyst)', fill: true }]);
-    if (mData?.miHistory)          renderChart('chart-mi-history',       [{ points: mData.miHistory,          colour: 'var(--color-mc-diamond)',  fill: true }]);
-
-    // Crafting charts
-    if (cData?.taskHistory) renderChart('chart-task-queue', [{ points: cData.taskHistory, colour: 'var(--color-mc-gold)',     fill: true }]);
-    if (cData?.cpuHistory)  renderChart('chart-cpu-util',   [{ points: cData.cpuHistory,  colour: 'var(--color-mc-amethyst)', fill: true, suffix: '%' }]);
-  }
-
   document.querySelectorAll<HTMLButtonElement>('.range-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const r = btn.dataset.range;
-      if (r) switchRange(r);
+      if (r) switchRangeSection(r);
     });
   });
 
-  // ── Kick off all loops ────────────────────────────────────────────────────
-  setInterval(refreshOverview, OVERVIEW_MS);
-  setInterval(refreshMachines, MACHINES_MS);
-  setInterval(() => loadItems(currentQuery || undefined), STORAGE_MS);
-  setInterval(loadVelocity, VELOCITY_MS);
-  setInterval(refreshCrafting, CRAFTING_MS);
+  // ── Lazy section loading via IntersectionObserver ────────────────────────
+  // Each section loads its data only when first scrolled into view.
+  // After first load, a per-section interval keeps it fresh.
+  const sectionIntervals = new Map<string, ReturnType<typeof setInterval>>();
+  const sectionLoaded    = new Set<string>();
 
-  // Immediate first load
+  function sectionVisible(id: string, loader: () => Promise<void>, intervalMs: number) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const obs = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        obs.disconnect();
+        if (sectionLoaded.has(id)) continue;
+        sectionLoaded.add(id);
+        loader();
+        sectionIntervals.set(id, setInterval(loader, intervalMs));
+      }
+    }, { rootMargin: '200px' }); // pre-load 200px before fully visible
+    obs.observe(el);
+  }
+
+  // Overview is always visible — load immediately and poll fast
+  sectionLoaded.add('overview');
   refreshOverview();
-  refreshMachines();
-  loadItems();
-  loadVelocity();
-  refreshCrafting();
+  sectionIntervals.set('overview', setInterval(refreshOverview, OVERVIEW_MS));
+
+  // Energy charts: visible near top, load right away with small delay
+  sectionVisible('energy',   async () => {
+    const data = await fetch(`/api/energy?range=${globalRange}`).then(r => r.json()).catch(() => null);
+    if (!data) return;
+    if (data.flowSeries) {
+      const names = Object.keys(data.flowSeries);
+      renderChart('chart-gen-con', [
+        { points: data.flowSeries[names[0]] ?? [], colour: 'var(--color-mc-emerald)', fill: false },
+        { points: data.flowSeries[names[1]] ?? data.flowSeries[names[0]] ?? [], colour: 'var(--color-mc-redstone)', fill: false },
+      ], { height: 110 });
+    }
+    if (data.netHistory)    renderChart('chart-energy-net',    [{ points: data.netHistory,    colour: 'var(--color-mc-emerald)', fill: true, suffix: ' FE/t' }]);
+    if (data.storedHistory) renderChart('chart-energy-stored', [{ points: data.storedHistory, colour: 'var(--color-mc-copper)',  fill: true, suffix: ' FE'   }]);
+    if (data.pctHistory)    renderChart('chart-energy-pct',    [{ points: data.pctHistory,    colour: 'var(--color-mc-gold)',    fill: true, suffix: '%'     }]);
+  }, 60_000);
+
+  // Storage section
+  sectionVisible('storage', async () => {
+    await Promise.all([loadItems(), loadVelocity()]);
+    const data = await fetch(`/api/ae-summary?range=${globalRange}`).then(r => r.json()).catch(() => null);
+    if (!data) return;
+    if (data.itemsHistory)     renderChart('chart-ae-items',     [{ points: data.itemsHistory,     colour: 'var(--color-mc-diamond)',  fill: true }]);
+    if (data.fluidsHistory)    renderChart('chart-ae-fluids',    [{ points: data.fluidsHistory,    colour: 'var(--color-mc-lapis)',    fill: true, suffix: ' mB'    }]);
+    if (data.chemicalsHistory) renderChart('chart-ae-chemicals', [{ points: data.chemicalsHistory, colour: 'var(--color-mc-emerald)', fill: true }]);
+    if (data.energyHistory)    renderChart('chart-ae-energy',    [{ points: data.energyHistory,    colour: 'var(--color-mc-amethyst)', fill: true, suffix: ' FE/t' }]);
+    if (data.storageHistory)   renderChart('chart-ae-storage',   [{ points: data.storageHistory,   colour: 'var(--color-mc-lapis)',    fill: true, suffix: ' slots' }]);
+  }, STORAGE_MS);
+
+  sectionVisible('storage-velocity', loadVelocity, VELOCITY_MS);
+
+  // Machines section
+  sectionVisible('machines', refreshMachines, MACHINES_MS);
+
+  // Crafting section
+  sectionVisible('crafting', refreshCrafting, CRAFTING_MS);
+
+  // ── switchRange: refresh all already-loaded sections ─────────────────────
+  // (replaces the old parallel blast — now only fires for visible sections)
+  async function switchRangeSection(range: string) {
+    globalRange = range;
+    updateRangeBtnStyles(range);
+    const loading = document.getElementById('range-loading');
+    if (loading) loading.classList.remove('hidden');
+
+    const tasks: Promise<void>[] = [];
+
+    if (sectionLoaded.has('energy')) tasks.push(
+      fetch(`/api/energy?range=${range}`).then(r => r.json()).then(eData => {
+        if (eData?.flowSeries) {
+          const names = Object.keys(eData.flowSeries);
+          renderChart('chart-gen-con', [
+            { points: eData.flowSeries[names[0]] ?? [], colour: 'var(--color-mc-emerald)', fill: false },
+            { points: eData.flowSeries[names[1]] ?? eData.flowSeries[names[0]] ?? [], colour: 'var(--color-mc-redstone)', fill: false },
+          ], { height: 110 });
+        }
+        if (eData?.netHistory)    renderChart('chart-energy-net',    [{ points: eData.netHistory,    colour: 'var(--color-mc-emerald)', fill: true, suffix: ' FE/t' }]);
+        if (eData?.storedHistory) renderChart('chart-energy-stored', [{ points: eData.storedHistory, colour: 'var(--color-mc-copper)',  fill: true, suffix: ' FE'   }]);
+        if (eData?.pctHistory)    renderChart('chart-energy-pct',    [{ points: eData.pctHistory,    colour: 'var(--color-mc-gold)',    fill: true, suffix: '%'     }]);
+      }).catch(() => undefined)
+    );
+
+    if (sectionLoaded.has('storage')) tasks.push(
+      fetch(`/api/ae-summary?range=${range}`).then(r => r.json()).then(aeData => {
+        if (aeData?.itemsHistory)     renderChart('chart-ae-items',     [{ points: aeData.itemsHistory,     colour: 'var(--color-mc-diamond)',  fill: true }]);
+        if (aeData?.fluidsHistory)    renderChart('chart-ae-fluids',    [{ points: aeData.fluidsHistory,    colour: 'var(--color-mc-lapis)',    fill: true, suffix: ' mB'    }]);
+        if (aeData?.chemicalsHistory) renderChart('chart-ae-chemicals', [{ points: aeData.chemicalsHistory, colour: 'var(--color-mc-emerald)', fill: true }]);
+        if (aeData?.energyHistory)    renderChart('chart-ae-energy',    [{ points: aeData.energyHistory,    colour: 'var(--color-mc-amethyst)', fill: true, suffix: ' FE/t' }]);
+        if (aeData?.storageHistory)   renderChart('chart-ae-storage',   [{ points: aeData.storageHistory,   colour: 'var(--color-mc-lapis)',    fill: true, suffix: ' slots' }]);
+      }).catch(() => undefined)
+    );
+
+    if (sectionLoaded.has('machines')) tasks.push(
+      fetch(`/api/machines?range=${range}`).then(r => r.json()).then(mData => {
+        if (mData?.activityHistory)    renderChart('chart-mach-activity',   [{ points: mData.activityHistory,    colour: 'var(--color-mc-emerald)',  fill: true }]);
+        if (mData?.activityPctHistory) renderChart('chart-mach-active-pct', [{ points: mData.activityPctHistory, colour: 'var(--color-mc-gold)',     fill: true, suffix: '%' }]);
+        if (mData?.mekHistory)         renderChart('chart-mek-history',      [{ points: mData.mekHistory,         colour: 'var(--color-mc-amethyst)', fill: true }]);
+        if (mData?.miHistory)          renderChart('chart-mi-history',       [{ points: mData.miHistory,          colour: 'var(--color-mc-diamond)',  fill: true }]);
+      }).catch(() => undefined)
+    );
+
+    if (sectionLoaded.has('crafting')) tasks.push(
+      fetch(`/api/crafting?range=${range}`).then(r => r.json()).then(cData => {
+        if (cData?.taskHistory) renderChart('chart-task-queue', [{ points: cData.taskHistory, colour: 'var(--color-mc-gold)',     fill: true }]);
+        if (cData?.cpuHistory)  renderChart('chart-cpu-util',   [{ points: cData.cpuHistory,  colour: 'var(--color-mc-amethyst)', fill: true, suffix: '%' }]);
+      }).catch(() => undefined)
+    );
+
+    await Promise.all(tasks);
+    if (loading) loading.classList.add('hidden');
+  }
 </script>
