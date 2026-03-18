@@ -3,7 +3,7 @@
  */
 
 import { queryFlux, INFLUX_BUCKET } from '../influx';
-import { type TimePoint, type ItemVelocity, rangeToWindow } from './shared';
+import { type TimePoint, type ItemVelocity, rangeToWindow, withHistoryFallback } from './shared';
 
 export interface AESummary {
   items_total: number;
@@ -58,17 +58,19 @@ export async function aeSummaryHistory(
   field: 'items_total' | 'energy_usage' | 'item_storage_used' | 'fluids_total' | 'chemicals_total' | 'fluid_storage_used' | 'chemical_storage_used',
   range = '-1h'
 ): Promise<TimePoint[]> {
-  const rows = await queryFlux(`
+  return withHistoryFallback(async (r) => {
+    const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
+  |> range(start: ${r})
   |> filter(fn: (r) => r._measurement == "ae_summary" and r._field == "${field}")
   |> group(columns: ["node", "_field"])
-  |> aggregateWindow(every: ${rangeToWindow(range)}, fn: last, createEmpty: false)
+  |> aggregateWindow(every: ${rangeToWindow(r)}, fn: last, createEmpty: false)
   |> group(columns: ["_time"])
   |> sum()
   |> group()
 `);
-  return rows.map(r => ({ time: String(r._time ?? ''), value: (r._value as number) ?? 0 }));
+    return rows.map(row => ({ time: String(row._time ?? ''), value: (row._value as number) ?? 0 }));
+  }, range);
 }
 
 export interface AEItem {

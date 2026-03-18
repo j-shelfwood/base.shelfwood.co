@@ -3,7 +3,7 @@
  */
 
 import { queryFlux, INFLUX_BUCKET } from '../influx';
-import { type TimePoint, rangeToWindow } from './shared';
+import { type TimePoint, rangeToWindow, withHistoryFallback } from './shared';
 
 export interface CraftingJob {
   item: string;
@@ -51,20 +51,23 @@ from(bucket: "${INFLUX_BUCKET}")
 }
 
 export async function craftingTaskHistory(range = '-1h'): Promise<TimePoint[]> {
-  const rows = await queryFlux(`
+  return withHistoryFallback(async (r) => {
+    const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
+  |> range(start: ${r})
   |> filter(fn: (r) => r._measurement == "ae_crafting_task" and r._field == "count")
-  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)
+  |> aggregateWindow(every: ${rangeToWindow(r)}, fn: mean, createEmpty: false)
 `);
-  return rows.map(r => ({ time: String(r._time ?? ''), value: (r._value as number) ?? 0 }));
+    return rows.map(row => ({ time: String(row._time ?? ''), value: (row._value as number) ?? 0 }));
+  }, range);
 }
 
 export async function craftingCpuHistory(range = '-1h'): Promise<TimePoint[]> {
-  const window = rangeToWindow(range);
-  const rows = await queryFlux(`
+  return withHistoryFallback(async (r) => {
+    const window = rangeToWindow(r);
+    const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
+  |> range(start: ${r})
   |> filter(fn: (r) => r._measurement == "ae_crafting_cpu" and (r._field == "busy" or r._field == "total"))
   |> aggregateWindow(every: ${window}, fn: last, createEmpty: false)
   |> pivot(rowKey: ["_time", "node", "source"], columnKey: ["_field"], valueColumn: "_value")
@@ -76,5 +79,6 @@ from(bucket: "${INFLUX_BUCKET}")
   |> mean()
   |> group()
 `);
-  return rows.map(r => ({ time: String(r._time ?? ''), value: (r._value as number) ?? 0 }));
+    return rows.map(row => ({ time: String(row._time ?? ''), value: (row._value as number) ?? 0 }));
+  }, range);
 }

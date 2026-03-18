@@ -269,12 +269,12 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     <div class="flex items-center gap-2 mb-3">
       <span class="font-mc text-base text-mc-muted">RANGE:</span>
       {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['21D','-21d'],['31D','-31d']].map(([label, val]) => (
-        <button data-energy-range={val}
-          class:list={['energy-range-btn font-mc text-sm px-3 py-1 pixel-border transition-colors',
+        <button data-range={val}
+          class:list={['range-btn font-mc text-sm px-3 py-1 pixel-border transition-colors',
             val === '-1h' ? 'bg-mc-gold/20 text-mc-gold border-mc-gold' : 'bg-mc-stone/40 text-mc-muted hover:text-mc-white']}
         >{label}</button>
       ))}
-      <span id="energy-range-loading" class="font-mc text-sm text-mc-muted hidden">LOADING...</span>
+      <span id="range-loading" class="font-mc text-sm text-mc-muted hidden">LOADING...</span>
     </div>
 
     <!-- Row 1: Gen vs Con (full width) -->
@@ -340,21 +340,9 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     <!-- Machine history charts -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
       <Panel title="ACTIVE MACHINES" raised>
-        <div class="flex items-center gap-2 mb-3">
-          <span class="font-mc text-sm text-mc-muted">RANGE:</span>
-          {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['31D','-31d']].map(([l,v]) => (
-            <button data-mach-range={v} class:list={['mach-range-btn mc-slot px-2 py-0.5 font-mc text-sm', v==='-1h' ? 'text-mc-emerald' : 'text-mc-muted']}>{l}</button>
-          ))}
-        </div>
         <LineChart data={machActivity} colour="var(--color-mc-emerald)" height={80} id="chart-mach-activity" />
       </Panel>
       <Panel title="ACTIVE %" raised>
-        <div class="flex items-center gap-2 mb-3">
-          <span class="font-mc text-sm text-mc-muted">RANGE:</span>
-          {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['31D','-31d']].map(([l,v]) => (
-            <button data-mach-pct-range={v} class:list={['mach-pct-range-btn mc-slot px-2 py-0.5 font-mc text-sm', v==='-1h' ? 'text-mc-gold' : 'text-mc-muted']}>{l}</button>
-          ))}
-        </div>
         <LineChart data={machActivityPct} colour="var(--color-mc-gold)" height={80} suffix="%" id="chart-mach-active-pct" />
       </Panel>
     </div>
@@ -362,7 +350,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       <div class="flex items-center gap-2 mb-3">
         <span class="font-mc text-sm text-mc-muted">RANGE:</span>
         {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['31D','-31d']].map(([l,v]) => (
-          <button data-mod-range={v} class:list={['mod-range-btn mc-slot px-2 py-0.5 font-mc text-sm', v==='-1h' ? 'text-mc-emerald' : 'text-mc-muted']}>{l}</button>
+          <button data-range={v} class:list={['range-btn mc-slot px-2 py-0.5 font-mc text-sm', v==='-1h' ? 'text-mc-gold border-mc-gold' : 'text-mc-muted']}>{l}</button>
         ))}
       </div>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -548,12 +536,11 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     <div class="flex items-center gap-2 mb-3">
       <span class="font-mc text-base text-mc-muted">RANGE:</span>
       {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['21D','-21d'],['31D','-31d']].map(([label, val]) => (
-        <button data-ae-range={val}
-          class:list={['ae-range-btn font-mc text-sm px-3 py-1 pixel-border transition-colors',
-            val === '-1h' ? 'bg-mc-diamond/20 text-mc-diamond border-mc-diamond' : 'bg-mc-stone/40 text-mc-muted hover:text-mc-white']}
+        <button data-range={val}
+          class:list={['range-btn font-mc text-sm px-3 py-1 pixel-border transition-colors',
+            val === '-1h' ? 'bg-mc-gold/20 text-mc-gold border-mc-gold' : 'bg-mc-stone/40 text-mc-muted hover:text-mc-white']}
         >{label}</button>
       ))}
-      <span id="ae-range-loading" class="font-mc text-sm text-mc-muted hidden">LOADING...</span>
     </div>
     <div class="grid grid-cols-1 lg:grid-cols-5 gap-3 mb-6">
       <Panel title="TOTAL ITEMS" raised>
@@ -753,21 +740,9 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     <!-- Crafting history charts -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
       <Panel title="TASK QUEUE HISTORY" raised>
-        <div class="flex items-center gap-2 mb-3">
-          <span class="font-mc text-sm text-mc-muted">RANGE:</span>
-          {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['31D','-31d']].map(([l,v]) => (
-            <button data-queue-range={v} class:list={['queue-range-btn mc-slot px-2 py-0.5 font-mc text-sm', v==='-1h' ? 'text-mc-gold' : 'text-mc-muted']}>{l}</button>
-          ))}
-        </div>
         <LineChart data={taskHistory} colour="var(--color-mc-gold)" height={80} id="chart-task-queue" />
       </Panel>
       <Panel title="CPU UTILIZATION %" raised>
-        <div class="flex items-center gap-2 mb-3">
-          <span class="font-mc text-sm text-mc-muted">RANGE:</span>
-          {[['1H','-1h'],['6H','-6h'],['24H','-24h'],['7D','-7d'],['14D','-14d'],['31D','-31d']].map(([l,v]) => (
-            <button data-cpu-range={v} class:list={['cpu-range-btn mc-slot px-2 py-0.5 font-mc text-sm', v==='-1h' ? 'text-mc-amethyst' : 'text-mc-muted']}>{l}</button>
-          ))}
-        </div>
         <LineChart data={cpuHistory} colour="var(--color-mc-amethyst)" height={80} suffix="%" id="chart-cpu-util" />
       </Panel>
     </div>
@@ -854,6 +829,9 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   const STORAGE_MS   = 60_000;
   const CRAFTING_MS  =  5_000;
   const VELOCITY_MS  = 120_000;
+
+  // ── Global chart range (shared across all sections) ────────────────────────
+  let globalRange = '-1h';
 
   // ── Shared helpers ─────────────────────────────────────────────────────────
   function setEl(id: string, val: string) {
@@ -1069,7 +1047,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   }
 
   async function refreshMachines() {
-    const data = await fetch('/api/machines').then(r => r.json());
+    const data = await fetch(`/api/machines?range=${globalRange}`).then(r => r.json());
     if (data.error) return;
     if (data.summary) {
       setEl('stat-mach-active', String(data.summary.active_machines));
@@ -1287,7 +1265,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   }
 
   async function refreshCrafting() {
-    const data = await fetch('/api/crafting').then(r => r.json());
+    const data = await fetch(`/api/crafting?range=${globalRange}`).then(r => r.json());
     if (data.error) return;
     if (data.cpus) renderCrafting(data.cpus, data.jobs ?? []);
     if (data.taskHistory) renderChart('chart-task-queue', [{ points: data.taskHistory, colour: 'var(--color-mc-gold)', fill: true }]);
@@ -1380,36 +1358,6 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     </svg>`;
   }
 
-  type ChartSpec = {
-    dataKey: string;
-    chartId: string;
-    colour: string;
-    suffix?: string;
-  };
-
-  function setupRangeSelector(
-    btnClass: string,
-    dataAttr: string,
-    apiUrl: (range: string) => string,
-    charts: ChartSpec[],
-    activeColour = 'text-mc-emerald'
-  ) {
-    document.querySelectorAll<HTMLButtonElement>(`.${btnClass}`).forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const range = btn.dataset[dataAttr] ?? '-1h';
-        document.querySelectorAll<HTMLButtonElement>(`.${btnClass}`).forEach(b => {
-          b.className = `${btnClass} mc-slot px-2 py-0.5 font-mc text-sm ` +
-            (b === btn ? activeColour : 'text-mc-muted');
-        });
-        const data = await fetch(apiUrl(range)).then(r => r.json()).catch(() => null);
-        if (!data) return;
-        for (const { dataKey, chartId, colour, suffix } of charts) {
-          if (data[dataKey]) renderChart(chartId, [{ points: data[dataKey], colour, fill: true, suffix: suffix ?? '' }]);
-        }
-      });
-    });
-  }
-
   document.querySelectorAll<HTMLElement>('.device-row').forEach(row => {
     row.addEventListener('click', async () => {
       const name = row.dataset.device;
@@ -1428,93 +1376,75 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     });
   });
 
-  let energyRange = '-1h';
-  async function switchEnergyRange(range: string) {
-    energyRange = range;
-    const loading = document.getElementById('energy-range-loading');
-    if (loading) loading.classList.remove('hidden');
-    document.querySelectorAll<HTMLButtonElement>('.energy-range-btn').forEach(btn => {
-      const active = btn.dataset.energyRange === range;
-      btn.className = `energy-range-btn font-mc text-sm px-3 py-1 pixel-border transition-colors ${active ? 'bg-mc-gold/20 text-mc-gold border-mc-gold' : 'bg-mc-stone/40 text-mc-muted hover:text-mc-white'}`;
+  // ── Global range selector — all charts share one range ────────────────────
+  function updateRangeBtnStyles(range: string) {
+    document.querySelectorAll<HTMLButtonElement>('.range-btn').forEach(btn => {
+      const active = btn.dataset.range === range;
+      // Preserve pixel-border class if present, else use mc-slot style
+      const hasPixelBorder = btn.classList.contains('pixel-border') ||
+        btn.className.includes('pixel-border');
+      if (hasPixelBorder) {
+        btn.className = `range-btn font-mc text-sm px-3 py-1 pixel-border transition-colors ${active ? 'bg-mc-gold/20 text-mc-gold border-mc-gold' : 'bg-mc-stone/40 text-mc-muted hover:text-mc-white'}`;
+      } else {
+        btn.className = `range-btn mc-slot px-2 py-0.5 font-mc text-sm ${active ? 'text-mc-gold border-mc-gold' : 'text-mc-muted'}`;
+      }
     });
-    const data = await fetch(`/api/energy?range=${range}`).then(r => r.json()).catch(() => null);
-    if (loading) loading.classList.add('hidden');
-    if (!data) return;
+  }
 
-    // Gen vs Con
-    if (data.flowSeries) {
-      const names = Object.keys(data.flowSeries);
-      const ptsA = data.flowSeries[names[0]] ?? [];
-      const ptsB = data.flowSeries[names[1]] ?? ptsA;
+  async function switchRange(range: string) {
+    globalRange = range;
+    updateRangeBtnStyles(range);
+
+    const loading = document.getElementById('range-loading');
+    if (loading) loading.classList.remove('hidden');
+
+    const [eData, aeData, mData, cData] = await Promise.all([
+      fetch(`/api/energy?range=${range}`).then(r => r.json()).catch(() => null),
+      fetch(`/api/ae-summary?range=${range}`).then(r => r.json()).catch(() => null),
+      fetch(`/api/machines?range=${range}`).then(r => r.json()).catch(() => null),
+      fetch(`/api/crafting?range=${range}`).then(r => r.json()).catch(() => null),
+    ]);
+
+    if (loading) loading.classList.add('hidden');
+
+    // Energy charts
+    if (eData?.flowSeries) {
+      const names = Object.keys(eData.flowSeries);
+      const ptsA = eData.flowSeries[names[0]] ?? [];
+      const ptsB = eData.flowSeries[names[1]] ?? ptsA;
       renderChart('chart-gen-con', [
         { points: ptsA, colour: 'var(--color-mc-emerald)', fill: false },
-        { points: ptsB, colour: 'var(--color-mc-redstone)', fill: false }
+        { points: ptsB, colour: 'var(--color-mc-redstone)', fill: false },
       ], { height: 110 });
     }
-    // Net Flow
-    if (data.netHistory) renderChart('chart-energy-net', [{ points: data.netHistory, colour: 'var(--color-mc-emerald)', fill: true, suffix: ' FE/t' }]);
-    // FE stored
-    if (data.storedHistory) renderChart('chart-energy-stored', [{ points: data.storedHistory, colour: 'var(--color-mc-copper)', fill: true, suffix: ' FE' }]);
-    // Storage %
-    if (data.pctHistory) renderChart('chart-energy-pct', [{ points: data.pctHistory, colour: 'var(--color-mc-gold)', fill: true, suffix: '%' }]);
+    if (eData?.netHistory)    renderChart('chart-energy-net',    [{ points: eData.netHistory,    colour: 'var(--color-mc-emerald)', fill: true, suffix: ' FE/t' }]);
+    if (eData?.storedHistory) renderChart('chart-energy-stored', [{ points: eData.storedHistory, colour: 'var(--color-mc-copper)',  fill: true, suffix: ' FE'   }]);
+    if (eData?.pctHistory)    renderChart('chart-energy-pct',    [{ points: eData.pctHistory,    colour: 'var(--color-mc-gold)',    fill: true, suffix: '%'     }]);
+
+    // AE charts
+    if (aeData?.itemsHistory)     renderChart('chart-ae-items',     [{ points: aeData.itemsHistory,     colour: 'var(--color-mc-diamond)',  fill: true }]);
+    if (aeData?.fluidsHistory)    renderChart('chart-ae-fluids',    [{ points: aeData.fluidsHistory,    colour: 'var(--color-mc-lapis)',    fill: true, suffix: ' mB'    }]);
+    if (aeData?.chemicalsHistory) renderChart('chart-ae-chemicals', [{ points: aeData.chemicalsHistory, colour: 'var(--color-mc-emerald)', fill: true }]);
+    if (aeData?.energyHistory)    renderChart('chart-ae-energy',    [{ points: aeData.energyHistory,    colour: 'var(--color-mc-amethyst)', fill: true, suffix: ' FE/t' }]);
+    if (aeData?.storageHistory)   renderChart('chart-ae-storage',   [{ points: aeData.storageHistory,   colour: 'var(--color-mc-lapis)',    fill: true, suffix: ' slots' }]);
+
+    // Machine charts
+    if (mData?.activityHistory)    renderChart('chart-mach-activity',   [{ points: mData.activityHistory,    colour: 'var(--color-mc-emerald)',  fill: true }]);
+    if (mData?.activityPctHistory) renderChart('chart-mach-active-pct', [{ points: mData.activityPctHistory, colour: 'var(--color-mc-gold)',     fill: true, suffix: '%' }]);
+    if (mData?.mekHistory)         renderChart('chart-mek-history',      [{ points: mData.mekHistory,         colour: 'var(--color-mc-amethyst)', fill: true }]);
+    if (mData?.miHistory)          renderChart('chart-mi-history',       [{ points: mData.miHistory,          colour: 'var(--color-mc-diamond)',  fill: true }]);
+
+    // Crafting charts
+    if (cData?.taskHistory) renderChart('chart-task-queue', [{ points: cData.taskHistory, colour: 'var(--color-mc-gold)',     fill: true }]);
+    if (cData?.cpuHistory)  renderChart('chart-cpu-util',   [{ points: cData.cpuHistory,  colour: 'var(--color-mc-amethyst)', fill: true, suffix: '%' }]);
   }
 
-  document.querySelectorAll<HTMLButtonElement>('.energy-range-btn').forEach(btn => {
+  document.querySelectorAll<HTMLButtonElement>('.range-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const r = btn.dataset.energyRange;
-      if (r) switchEnergyRange(r);
+      const r = btn.dataset.range;
+      if (r) switchRange(r);
     });
   });
-
-  // ── AE range selector ─────────────────────────────────────────────────────
-  let aeRange = '-1h';
-  async function switchAERange(range: string) {
-    aeRange = range;
-    const loading = document.getElementById('ae-range-loading');
-    if (loading) loading.classList.remove('hidden');
-    document.querySelectorAll<HTMLButtonElement>('.ae-range-btn').forEach(btn => {
-      const active = btn.dataset.aeRange === range;
-      btn.className = `ae-range-btn font-mc text-sm px-3 py-1 pixel-border transition-colors ${active ? 'bg-mc-diamond/20 text-mc-diamond border-mc-diamond' : 'bg-mc-stone/40 text-mc-muted hover:text-mc-white'}`;
-    });
-    const data = await fetch(`/api/ae-summary?range=${range}`).then(r => r.json()).catch(() => null);
-    if (loading) loading.classList.add('hidden');
-    if (!data) return;
-    if (data.itemsHistory)    renderChart('chart-ae-items',     [{ points: data.itemsHistory, colour: 'var(--color-mc-diamond)', fill: true }]);
-    if (data.fluidsHistory)   renderChart('chart-ae-fluids',    [{ points: data.fluidsHistory, colour: 'var(--color-mc-lapis)', fill: true, suffix: ' mB' }]);
-    if (data.chemicalsHistory) renderChart('chart-ae-chemicals', [{ points: data.chemicalsHistory, colour: 'var(--color-mc-emerald)', fill: true }]);
-    if (data.energyHistory)   renderChart('chart-ae-energy',    [{ points: data.energyHistory, colour: 'var(--color-mc-amethyst)', fill: true, suffix: ' FE/t' }]);
-    if (data.storageHistory)  renderChart('chart-ae-storage',   [{ points: data.storageHistory, colour: 'var(--color-mc-lapis)', fill: true, suffix: ' slots' }]);
-  }
-
-  document.querySelectorAll<HTMLButtonElement>('.ae-range-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const r = btn.dataset.aeRange;
-      if (r) switchAERange(r);
-    });
-  });
-
-  // ── Machine history range buttons ─────────────────────────────────────────
-  setupRangeSelector('mach-range-btn', 'machRange', r => `/api/machines?range=${r}`, [
-    { dataKey: 'activityHistory', chartId: 'chart-mach-activity', colour: 'var(--color-mc-emerald)' },
-  ]);
-
-  setupRangeSelector('mach-pct-range-btn', 'machPctRange', r => `/api/machines?range=${r}`, [
-    { dataKey: 'activityPctHistory', chartId: 'chart-mach-active-pct', colour: 'var(--color-mc-gold)', suffix: '%' },
-  ], 'text-mc-gold');
-
-  setupRangeSelector('mod-range-btn', 'modRange', r => `/api/machines?range=${r}`, [
-    { dataKey: 'mekHistory', chartId: 'chart-mek-history', colour: 'var(--color-mc-amethyst)' },
-    { dataKey: 'miHistory',  chartId: 'chart-mi-history',  colour: 'var(--color-mc-diamond)' },
-  ]);
-
-  // ── Crafting history range buttons ────────────────────────────────────────
-  setupRangeSelector('queue-range-btn', 'queueRange', r => `/api/crafting?range=${r}`, [
-    { dataKey: 'taskHistory', chartId: 'chart-task-queue', colour: 'var(--color-mc-gold)' },
-  ], 'text-mc-gold');
-
-  setupRangeSelector('cpu-range-btn', 'cpuRange', r => `/api/crafting?range=${r}`, [
-    { dataKey: 'cpuHistory', chartId: 'chart-cpu-util', colour: 'var(--color-mc-amethyst)', suffix: '%' },
-  ], 'text-mc-amethyst');
 
   // ── Kick off all loops ────────────────────────────────────────────────────
   setInterval(refreshOverview, OVERVIEW_MS);

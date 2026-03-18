@@ -3,7 +3,7 @@
  */
 
 import { queryFlux, INFLUX_BUCKET } from '../influx';
-import { type TimePoint, rangeToWindow } from './shared';
+import { type TimePoint, rangeToWindow, withHistoryFallback } from './shared';
 
 export interface EnergySummary {
   stored_fe: number;
@@ -48,54 +48,57 @@ from(bucket: "${INFLUX_BUCKET}")
 }
 
 export async function energyHistory(range = '-1h'): Promise<TimePoint[]> {
-  const window = rangeToWindow(range);
-  const rows = await queryFlux(`
+  return withHistoryFallback(async (r) => {
+    const window = rangeToWindow(r);
+    const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
+  |> range(start: ${r})
   |> filter(fn: (r) => r._measurement == "energy_total" and r._field == "percent")
   |> aggregateWindow(every: ${window}, fn: mean, createEmpty: false)
 `);
-  return rows.map(r => ({
-    time: String(r._time ?? ''),
-    value: (r._value as number) ?? 0,
-  }));
+    return rows.map(row => ({ time: String(row._time ?? ''), value: (row._value as number) ?? 0 }));
+  }, range);
 }
 
 export async function energyFlowHistory(range = '-1h'): Promise<{ time: string; value: number; name: string }[]> {
-  const window = rangeToWindow(range);
-  const rows = await queryFlux(`
+  const queryForRange = async (r: string) => {
+    const window = rangeToWindow(r);
+    const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
+  |> range(start: ${r})
   |> filter(fn: (r) => r._measurement == "energy_flow" and r._field == "rate_fe_t")
   |> aggregateWindow(every: ${window}, fn: mean, createEmpty: false)
 `);
-  return rows.map(r => ({
-    time: String(r._time ?? ''),
-    value: (r._value as number) ?? 0,
-    name: String(r.name ?? ''),
-  }));
+    return rows.map(row => ({
+      time: String(row._time ?? ''),
+      value: (row._value as number) ?? 0,
+      name: String(row.name ?? ''),
+    }));
+  };
+  const result = await queryForRange(range);
+  if (result.length > 0) return result;
+  return queryForRange('-30d');
 }
 
 export async function energyStoredHistory(range = '-1h'): Promise<TimePoint[]> {
-  const window = rangeToWindow(range);
-  const rows = await queryFlux(`
+  return withHistoryFallback(async (r) => {
+    const window = rangeToWindow(r);
+    const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
+  |> range(start: ${r})
   |> filter(fn: (r) => r._measurement == "energy_total" and r._field == "stored_fe")
   |> aggregateWindow(every: ${window}, fn: mean, createEmpty: false)
 `);
-  return rows.map(r => ({
-    time: String(r._time ?? ''),
-    value: (r._value as number) ?? 0,
-  }));
+    return rows.map(row => ({ time: String(row._time ?? ''), value: (row._value as number) ?? 0 }));
+  }, range);
 }
 
 export async function energyNetHistory(range = '-1h'): Promise<TimePoint[]> {
-  // Total flow = sum of all energy_flow detector rates per time window
-  const window = rangeToWindow(range);
-  const rows = await queryFlux(`
+  return withHistoryFallback(async (r) => {
+    const window = rangeToWindow(r);
+    const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
+  |> range(start: ${r})
   |> filter(fn: (r) => r._measurement == "energy_flow" and r._field == "rate_fe_t")
   |> aggregateWindow(every: ${window}, fn: mean, createEmpty: false)
   |> group(columns: ["_time"])
@@ -109,10 +112,8 @@ from(bucket: "${INFLUX_BUCKET}")
   |> map(fn: (r) => ({ r with _value: r.net, _field: "net_fe_t" }))
   |> group()
 `);
-  return rows.map(r => ({
-    time: String(r._time ?? ''),
-    value: (r._value as number) ?? 0,
-  }));
+    return rows.map(row => ({ time: String(row._time ?? ''), value: (row._value as number) ?? 0 }));
+  }, range);
 }
 
 export interface EnergyDevice {

@@ -3,7 +3,7 @@
  */
 
 import { queryFlux, INFLUX_BUCKET } from '../influx';
-import { type TimePoint, rangeToWindow } from './shared';
+import { type TimePoint, rangeToWindow, withHistoryFallback } from './shared';
 
 export interface MachineSummary {
   total_machines: number;
@@ -248,10 +248,11 @@ from(bucket: "${INFLUX_BUCKET}")
 }
 
 export async function machineActivityHistory(range = '-1h'): Promise<TimePoint[]> {
-  const window = rangeToWindow(range);
-  const rows = await queryFlux(`
+  return withHistoryFallback(async (r) => {
+    const window = rangeToWindow(r);
+    const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
+  |> range(start: ${r})
   |> filter(fn: (r) => r._measurement == "machine_activity" and r._field == "active")
   |> filter(fn: (r) => r.type != "me_bridge")
   |> group(columns: ["node", "name", "_field"])
@@ -261,14 +262,16 @@ from(bucket: "${INFLUX_BUCKET}")
   |> count()
   |> group()
 `);
-  return rows.map(r => ({ time: String(r._time ?? ''), value: (r._value as number) ?? 0 }));
+    return rows.map(row => ({ time: String(row._time ?? ''), value: (row._value as number) ?? 0 }));
+  }, range);
 }
 
 export async function machineActivePercentHistory(range = '-1h'): Promise<TimePoint[]> {
-  const window = rangeToWindow(range);
-  const rows = await queryFlux(`
+  return withHistoryFallback(async (r) => {
+    const window = rangeToWindow(r);
+    const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
+  |> range(start: ${r})
   |> filter(fn: (r) => r._measurement == "machine_activity" and r._field == "active")
   |> filter(fn: (r) => r.type != "me_bridge")
   |> group(columns: ["node", "name", "_field"])
@@ -287,7 +290,8 @@ from(bucket: "${INFLUX_BUCKET}")
     }))
   |> group()
 `);
-  return rows.map(r => ({ time: String(r._time ?? ''), value: (r._value as number) ?? 0 }));
+    return rows.map(row => ({ time: String(row._time ?? ''), value: (row._value as number) ?? 0 }));
+  }, range);
 }
 
 export async function machineTypeHistory(type: string, range = '-1h'): Promise<TimePoint[]> {
@@ -305,10 +309,11 @@ from(bucket: "${INFLUX_BUCKET}")
 }
 
 export async function modActivityHistory(mod: string, range = '-1h'): Promise<TimePoint[]> {
-  const window = rangeToWindow(range);
-  const rows = await queryFlux(`
+  return withHistoryFallback(async (r) => {
+    const window = rangeToWindow(r);
+    const rows = await queryFlux(`
 from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
+  |> range(start: ${r})
   |> filter(fn: (r) => r._measurement == "machine_activity" and r._field == "active" and r.mod == "${mod}")
   |> filter(fn: (r) => r.type != "me_bridge")
   |> group(columns: ["node", "name", "_field"])
@@ -318,5 +323,6 @@ from(bucket: "${INFLUX_BUCKET}")
   |> count()
   |> group()
 `);
-  return rows.map(r => ({ time: String(r._time ?? ''), value: (r._value as number) ?? 0 }));
+    return rows.map(row => ({ time: String(row._time ?? ''), value: (row._value as number) ?? 0 }));
+  }, range);
 }
