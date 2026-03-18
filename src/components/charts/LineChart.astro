@@ -105,10 +105,10 @@ function fmtVal(v: number | null): string {
   ) : (
     <div
       data-no-data
-      class="flex items-center justify-center font-mc text-xs text-mc-muted"
+      class="flex items-center justify-center"
       style={`height: ${HEIGHT}px`}
     >
-      NO DATA
+      <div class="font-mc text-xs text-mc-muted animate-pulse">■ ■ ■</div>
     </div>
   )}
 </div>

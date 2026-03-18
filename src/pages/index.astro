@@ -1303,7 +1303,12 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     const el = document.getElementById(containerId);
     if (!el) return;
     const allPoints = series.flatMap(s => s.points);
-    if (allPoints.length < 2) return;
+    if (allPoints.length < 2) {
+      // Replace loading indicator with NO DATA text
+      const noData = el.querySelector('[data-no-data]');
+      if (noData) noData.innerHTML = '<div class="font-mc text-xs text-mc-muted">NO DATA</div>';
+      return;
+    }
 
     const existingSvg = el.querySelector('svg');
     const H = options.height ?? (existingSvg ? (parseInt(existingSvg.getAttribute('height') ?? '') || 80) : 80);
