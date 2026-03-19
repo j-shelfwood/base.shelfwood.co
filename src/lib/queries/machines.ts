@@ -258,7 +258,7 @@ export async function miMachineFluids(): Promise<MIMachineFluid[]> {
   const rows = await sql`
     SELECT DISTINCT ON (node, name, fluid)
       name,
-      mod as type,
+      type,
       fluid,
       amount,
       capacity,
