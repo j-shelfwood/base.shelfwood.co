@@ -212,9 +212,9 @@ export async function aeCPUs(): Promise<AECPUs> {
     SELECT DISTINCT ON (node, source)
       node,
       source,
-      cpu_total as total,
-      cpu_busy as busy
-    FROM ae_summary
+      total,
+      busy
+    FROM ae_crafting_cpu
     WHERE time >= NOW() - INTERVAL '24 hours'
     ORDER BY node, source, time DESC
   `;

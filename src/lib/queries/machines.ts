@@ -13,14 +13,14 @@ export interface MachineSummary {
 
 export async function machineSummary(): Promise<MachineSummary | null> {
   const rows = await sql`
-    SELECT 
-      SUM(total) as total_machines,
-      SUM(active) as active_machines
+    SELECT
+      SUM(total_machines) as total_machines,
+      SUM(active_machines) as active_machines
     FROM (
       SELECT DISTINCT ON (node)
         node,
-        total,
-        active
+        total_machines,
+        active_machines
       FROM machine_summary
       WHERE time >= NOW() - INTERVAL '24 hours'
       ORDER BY node, time DESC
@@ -48,18 +48,18 @@ export interface MachineType {
 
 export async function machineTypes(): Promise<MachineType[]> {
   const rows = await sql`
-    SELECT 
+    SELECT
       type,
       mod,
-      SUM(count) as total_count,
-      SUM(CASE WHEN active = 1 THEN count ELSE 0 END) as active_count
+      SUM(total_count) as total_count,
+      SUM(active_count) as active_count
     FROM (
       SELECT DISTINCT ON (node, mod, type)
         node,
         mod,
         type,
-        count,
-        CASE WHEN time >= NOW() - INTERVAL '2 minutes' THEN 1 ELSE 0 END as active
+        total_count,
+        active_count
       FROM machine_type
       WHERE time >= NOW() - INTERVAL '24 hours'
         AND type != 'me_bridge'
@@ -101,14 +101,10 @@ export async function mekanismMachines(): Promise<MekanismMachine[]> {
       type,
       mod,
       active,
-      energy_use as energy_percent,
+      energy_percent,
       progress,
-      recipe_progress as progress_total,
-      CASE 
-        WHEN recipe_progress > 0 
-        THEN (progress::float / recipe_progress::float * 100) 
-        ELSE 0 
-      END as progress_percent
+      progress_total,
+      progress_percent
     FROM machine_activity
     WHERE time >= NOW() - INTERVAL '24 hours'
       AND mod = 'mekanism'
@@ -121,7 +117,7 @@ export async function mekanismMachines(): Promise<MekanismMachine[]> {
       name: String(r.name),
       type: String(r.type),
       node: String(r.node),
-      active: Number(r.active) > 0,
+      active: Number(r.active) > 0 || r.inferred_active === true,
       energy_percent: Number(r.energy_percent) || 0,
       progress: Number(r.progress) || 0,
       progress_total: Number(r.progress_total) || 0,
@@ -151,7 +147,7 @@ export async function miMachines(): Promise<MIMachine[]> {
         type,
         mod,
         active,
-        energy_use as energy_percent
+        energy_percent
       FROM machine_activity
       WHERE time >= NOW() - INTERVAL '24 hours'
         AND mod = 'modern_industrialization'
