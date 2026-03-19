@@ -88,11 +88,11 @@ export async function craftingCpuHistory(range = '-1h'): Promise<TimePoint[]> {
         ELSE 0 
       END as percent
     FROM (
-      SELECT 
+      SELECT
         time_bucket(${window}::interval, time) as bucket,
-        AVG(cpu_busy) as busy,
-        AVG(cpu_total) as total
-      FROM ae_summary
+        AVG(busy) as busy,
+        AVG(total) as total
+      FROM ae_crafting_cpu
       WHERE time >= NOW() - ${interval}::interval
       GROUP BY bucket
     ) stats

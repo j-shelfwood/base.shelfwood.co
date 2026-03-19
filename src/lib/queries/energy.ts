@@ -43,7 +43,7 @@ export async function energyFlow(): Promise<EnergyFlow[]> {
     SELECT DISTINCT ON (node, name)
       node,
       name,
-      net_eu as rate_fe_t
+      rate_fe_t
     FROM energy_flow
     WHERE time >= NOW() - INTERVAL '24 hours'
     ORDER BY node, name, time DESC
@@ -83,7 +83,7 @@ export async function energyFlowHistory(range = '-1h'): Promise<{ time: string; 
     SELECT 
       time_bucket(${window}::interval, time) as bucket,
       name,
-      AVG(net_eu) as avg_rate
+      AVG(rate_fe_t) as avg_rate
     FROM energy_flow
     WHERE time >= NOW() - ${interval}::interval
     GROUP BY bucket, name
@@ -124,7 +124,7 @@ export async function energyNetHistory(range = '-1h'): Promise<TimePoint[]> {
   const rows = await sql`
     SELECT 
       time_bucket(${window}::interval, time) as bucket,
-      SUM(net_eu) as total_net
+      SUM(rate_fe_t) as total_net
     FROM energy_flow
     WHERE time >= NOW() - ${interval}::interval
     GROUP BY bucket
@@ -151,7 +151,7 @@ export async function energyDevices(): Promise<EnergyDevice[]> {
     SELECT DISTINCT ON (node, name)
       node,
       name,
-      category as storage,
+      storage,
       stored_fe,
       capacity_fe,
       percent

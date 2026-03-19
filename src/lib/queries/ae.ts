@@ -29,22 +29,22 @@ export async function aeSummary(): Promise<AESummary | null> {
     SELECT DISTINCT ON (node, source)
       node,
       source,
-      items as items_total,
-      types as items_unique,
-      fluids as fluids_total,
-      0 as fluids_unique,
-      chemicals as chemicals_total,
-      0 as chemicals_unique,
-      0 as item_storage_used,
-      0 as item_storage_total,
-      0 as fluid_storage_used,
-      0 as fluid_storage_total,
-      0 as chemical_storage_used,
-      0 as chemical_storage_total,
-      0 as energy_usage,
-      0 as energy_input,
-      0 as energy_stored,
-      0 as energy_capacity
+      items_total,
+      items_unique,
+      fluids_total,
+      fluids_unique,
+      chemicals_total,
+      chemicals_unique,
+      item_storage_used,
+      item_storage_total,
+      fluid_storage_used,
+      fluid_storage_total,
+      chemical_storage_used,
+      chemical_storage_total,
+      energy_usage,
+      energy_input,
+      energy_stored,
+      energy_capacity
     FROM ae_summary
     WHERE time >= NOW() - INTERVAL '24 hours'
     ORDER BY node, source, time DESC
@@ -81,18 +81,7 @@ export async function aeSummaryHistory(
   const interval = parseRangeInterval(range);
   const window = rangeToWindow(range);
   
-  // Map field names to actual column names in ae_summary table
-  const columnMap: Record<string, string> = {
-    items_total: 'items',
-    energy_usage: 'items', // Default fallback, may need adjustment
-    item_storage_used: 'items',
-    fluids_total: 'fluids',
-    chemicals_total: 'chemicals',
-    fluid_storage_used: 'fluids',
-    chemical_storage_used: 'chemicals',
-  };
-  
-  const column = columnMap[field] || 'items';
+  const column = field;
   
   const rows = await sql`
     SELECT 
