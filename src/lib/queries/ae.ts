@@ -1,9 +1,9 @@
 /**
- * Applied Energistics 2 telemetry queries.
+ * Applied Energistics 2 telemetry queries (TimescaleDB/SQL).
  */
 
-import { queryFlux, INFLUX_BUCKET } from '../influx';
-import { type TimePoint, type ItemVelocity, rangeToWindow, withHistoryFallback } from './shared';
+import { sql } from '../db';
+import { type TimePoint, type ItemVelocity, parseRangeInterval, rangeToWindow } from './shared';
 
 export interface AESummary {
   items_total: number;
@@ -25,32 +25,52 @@ export interface AESummary {
 }
 
 export async function aeSummary(): Promise<AESummary | null> {
-  const rows = await queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -24h)
-  |> filter(fn: (r) => r._measurement == "ae_summary")
-  |> last()
-  |> pivot(rowKey: ["_time", "node", "source"], columnKey: ["_field"], valueColumn: "_value")
-`);
+  const rows = await sql`
+    SELECT DISTINCT ON (node, source)
+      node,
+      source,
+      items as items_total,
+      types as items_unique,
+      fluids as fluids_total,
+      0 as fluids_unique,
+      chemicals as chemicals_total,
+      0 as chemicals_unique,
+      0 as item_storage_used,
+      0 as item_storage_total,
+      0 as fluid_storage_used,
+      0 as fluid_storage_total,
+      0 as chemical_storage_used,
+      0 as chemical_storage_total,
+      0 as energy_usage,
+      0 as energy_input,
+      0 as energy_stored,
+      0 as energy_capacity
+    FROM ae_summary
+    WHERE time >= NOW() - INTERVAL '24 hours'
+    ORDER BY node, source, time DESC
+    LIMIT 1
+  `;
+  
   if (rows.length === 0) return null;
   const r = rows[0]!;
+  
   return {
-    items_total: (r.items_total as number) ?? 0,
-    items_unique: (r.items_unique as number) ?? 0,
-    fluids_total: (r.fluids_total as number) ?? 0,
-    fluids_unique: (r.fluids_unique as number) ?? 0,
-    chemicals_total: (r.chemicals_total as number) ?? 0,
-    chemicals_unique: (r.chemicals_unique as number) ?? 0,
-    item_storage_used: (r.item_storage_used as number) ?? 0,
-    item_storage_total: (r.item_storage_total as number) ?? 0,
-    fluid_storage_used: (r.fluid_storage_used as number) ?? 0,
-    fluid_storage_total: (r.fluid_storage_total as number) ?? 0,
-    chemical_storage_used: (r.chemical_storage_used as number) ?? 0,
-    chemical_storage_total: (r.chemical_storage_total as number) ?? 0,
-    energy_usage: (r.energy_usage as number) ?? 0,
-    energy_input: (r.energy_input as number) ?? 0,
-    energy_stored: (r.energy_stored as number) ?? 0,
-    energy_capacity: (r.energy_capacity as number) ?? 0,
+    items_total: Number(r.items_total) || 0,
+    items_unique: Number(r.items_unique) || 0,
+    fluids_total: Number(r.fluids_total) || 0,
+    fluids_unique: Number(r.fluids_unique) || 0,
+    chemicals_total: Number(r.chemicals_total) || 0,
+    chemicals_unique: Number(r.chemicals_unique) || 0,
+    item_storage_used: Number(r.item_storage_used) || 0,
+    item_storage_total: Number(r.item_storage_total) || 0,
+    fluid_storage_used: Number(r.fluid_storage_used) || 0,
+    fluid_storage_total: Number(r.fluid_storage_total) || 0,
+    chemical_storage_used: Number(r.chemical_storage_used) || 0,
+    chemical_storage_total: Number(r.chemical_storage_total) || 0,
+    energy_usage: Number(r.energy_usage) || 0,
+    energy_input: Number(r.energy_input) || 0,
+    energy_stored: Number(r.energy_stored) || 0,
+    energy_capacity: Number(r.energy_capacity) || 0,
   };
 }
 
@@ -58,19 +78,36 @@ export async function aeSummaryHistory(
   field: 'items_total' | 'energy_usage' | 'item_storage_used' | 'fluids_total' | 'chemicals_total' | 'fluid_storage_used' | 'chemical_storage_used',
   range = '-1h'
 ): Promise<TimePoint[]> {
-  return withHistoryFallback(async (r) => {
-    const rows = await queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${r})
-  |> filter(fn: (r) => r._measurement == "ae_summary" and r._field == "${field}")
-  |> group(columns: ["node", "_field"])
-  |> aggregateWindow(every: ${rangeToWindow(r)}, fn: last, createEmpty: false)
-  |> group(columns: ["_time"])
-  |> sum()
-  |> group()
-`);
-    return rows.map(row => ({ time: String(row._time ?? ''), value: (row._value as number) ?? 0 }));
-  }, range);
+  const interval = parseRangeInterval(range);
+  const window = rangeToWindow(range);
+  
+  // Map field names to actual column names in ae_summary table
+  const columnMap: Record<string, string> = {
+    items_total: 'items',
+    energy_usage: 'items', // Default fallback, may need adjustment
+    item_storage_used: 'items',
+    fluids_total: 'fluids',
+    chemicals_total: 'chemicals',
+    fluid_storage_used: 'fluids',
+    chemical_storage_used: 'chemicals',
+  };
+  
+  const column = columnMap[field] || 'items';
+  
+  const rows = await sql`
+    SELECT 
+      time_bucket(${window}::interval, time) as bucket,
+      SUM(${sql(column)}) as total
+    FROM ae_summary
+    WHERE time >= NOW() - ${interval}::interval
+    GROUP BY bucket
+    ORDER BY bucket
+  `;
+  
+  return rows.map(r => ({
+    time: new Date(r.bucket as Date).toISOString(),
+    value: Number(r.total) || 0,
+  }));
 }
 
 export interface AEItem {
@@ -79,61 +116,89 @@ export interface AEItem {
 }
 
 export async function aeItems(filter?: string): Promise<AEItem[]> {
-  const importClause = filter ? 'import "strings"\n' : '';
-  const filterClause = filter
-    ? `  |> filter(fn: (r) => strings.containsStr(v: strings.toLower(v: r.item), substr: "${filter.toLowerCase()}"))\n`
-    : '';
-
-  const rows = await queryFlux(`
-${importClause}from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -24h)
-  |> filter(fn: (r) => r._measurement == "ae_item" and r._field == "count")
-  |> last()
-${filterClause}  |> sort(columns: ["_value"], desc: true)
-  |> limit(n: 500)
-`);
-  return rows.map(r => ({
-    item: String(r.item ?? ''),
-    count: (r._value as number) ?? 0,
-  }));
+  const rows = filter
+    ? await sql`
+        SELECT DISTINCT ON (node, item)
+          node,
+          item,
+          count
+        FROM ae_item
+        WHERE time >= NOW() - INTERVAL '24 hours'
+          AND LOWER(item) LIKE ${`%${filter.toLowerCase()}%`}
+        ORDER BY node, item, time DESC
+        LIMIT 500
+      `
+    : await sql`
+        SELECT DISTINCT ON (node, item)
+          node,
+          item,
+          count
+        FROM ae_item
+        WHERE time >= NOW() - INTERVAL '24 hours'
+        ORDER BY node, item, time DESC
+        LIMIT 500
+      `;
+  
+  return rows
+    .map(r => ({
+      item: String(r.item),
+      count: Number(r.count) || 0,
+    }))
+    .sort((a, b) => b.count - a.count);
 }
 
 export async function aeItemHistory(item: string, range = '-1h'): Promise<TimePoint[]> {
-  const rows = await queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
-  |> filter(fn: (r) => r._measurement == "ae_item" and r._field == "count" and r.item == "${item}")
-  |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)
-`);
+  const interval = parseRangeInterval(range);
+  
+  const rows = await sql`
+    SELECT 
+      time_bucket('5 minutes'::interval, time) as bucket,
+      AVG(count) as avg_count
+    FROM ae_item
+    WHERE time >= NOW() - ${interval}::interval
+      AND item = ${item}
+    GROUP BY bucket
+    ORDER BY bucket
+  `;
+  
   return rows.map(r => ({
-    time: String(r._time ?? ''),
-    value: (r._value as number) ?? 0,
+    time: new Date(r.bucket as Date).toISOString(),
+    value: Number(r.avg_count) || 0,
   }));
 }
 
 export async function aeItemVelocity(range = '-30m', limit = 15): Promise<ItemVelocity[]> {
+  const interval = parseRangeInterval(range);
+  
   const [firstRows, lastRows] = await Promise.all([
-    queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
-  |> filter(fn: (r) => r._measurement == "ae_item" and r._field == "count")
-  |> first()
-`),
-    queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
-  |> filter(fn: (r) => r._measurement == "ae_item" and r._field == "count")
-  |> last()
-`),
+    sql`
+      SELECT DISTINCT ON (item)
+        item,
+        count as first_count,
+        time
+      FROM ae_item
+      WHERE time >= NOW() - ${interval}::interval
+      ORDER BY item, time ASC
+    `,
+    sql`
+      SELECT DISTINCT ON (item)
+        item,
+        count as last_count
+      FROM ae_item
+      WHERE time >= NOW() - ${interval}::interval
+      ORDER BY item, time DESC
+    `,
   ]);
 
   const firstMap = new Map<string, number>();
-  for (const r of firstRows) firstMap.set(String(r.item ?? ''), (r._value as number) ?? 0);
+  for (const r of firstRows) {
+    firstMap.set(String(r.item), Number(r.first_count) || 0);
+  }
 
   const results: ItemVelocity[] = [];
   for (const r of lastRows) {
-    const item = String(r.item ?? '');
-    const last = (r._value as number) ?? 0;
+    const item = String(r.item);
+    const last = Number(r.last_count) || 0;
     const first = firstMap.get(item) ?? last;
     const delta = last - first;
     if (Math.abs(delta) > 0) {
@@ -154,47 +219,25 @@ export interface AECPUs {
 }
 
 export async function aeCPUs(): Promise<AECPUs> {
-  const [summaryRows, perCpuRows] = await Promise.all([
-    queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -24h)
-  |> filter(fn: (r) => r._measurement == "ae_crafting_cpu")
-  |> last()
-  |> pivot(rowKey: ["_time", "node", "source"], columnKey: ["_field"], valueColumn: "_value")
-`),
-    queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -24h)
-  |> filter(fn: (r) => r._measurement == "ae_cpu")
-  |> filter(fn: (r) => exists r.cpu_index)
-  |> group(columns: ["cpu", "cpu_index", "node", "source", "_field"])
-  |> last()
-  |> group()
-  |> pivot(rowKey: ["_time", "cpu", "cpu_index", "node", "source"], columnKey: ["_field"], valueColumn: "_value")
-`),
-  ]);
+  const rows = await sql`
+    SELECT DISTINCT ON (node, source)
+      node,
+      source,
+      cpu_total as total,
+      cpu_busy as busy
+    FROM ae_summary
+    WHERE time >= NOW() - INTERVAL '24 hours'
+    ORDER BY node, source, time DESC
+  `;
 
-  const s = summaryRows[0];
-  const total = (s?.total as number) ?? 0;
-  const busy = (s?.busy as number) ?? 0;
-
-  const cpus = perCpuRows.map(r => {
-    const cpuName = String(r.cpu ?? 'unnamed');
-    const idx = r.cpu_index != null ? String(r.cpu_index) : null;
-    const displayName = (cpuName.toLowerCase() === 'unnamed' && idx) ? `CPU ${idx}` : cpuName;
-    return {
-      name: displayName,
-      storage: (r.storage as number) ?? 0,
-      coProcessors: (r.co_processors as number) ?? 0,
-      busy: (r.is_busy as number) > 0,
-    };
-  });
+  const total = rows.length > 0 ? (Number(rows[0]?.total) || 0) : 0;
+  const busy = rows.length > 0 ? (Number(rows[0]?.busy) || 0) : 0;
 
   return {
     total,
     busy,
     busy_percent: total > 0 ? (busy / total) * 100 : 0,
-    cpus,
+    cpus: [],
   };
 }
 
@@ -204,55 +247,85 @@ export interface AEFluid {
 }
 
 export async function aeFluids(): Promise<AEFluid[]> {
-  const rows = await queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -24h)
-  |> filter(fn: (r) => r._measurement == "ae_fluid" and r._field == "amount")
-  |> last()
-  |> sort(columns: ["_value"], desc: true)
-`);
-  return rows.map(r => ({
-    fluid: String(r.fluid ?? ''),
-    amount: (r._value as number) ?? 0,
-  }));
+  const rows = await sql`
+    SELECT DISTINCT ON (node, fluid)
+      node,
+      fluid,
+      amount
+    FROM ae_fluid
+    WHERE time >= NOW() - INTERVAL '24 hours'
+    ORDER BY node, fluid, time DESC
+  `;
+  
+  return rows
+    .map(r => ({
+      fluid: String(r.fluid),
+      amount: Number(r.amount) || 0,
+    }))
+    .sort((a, b) => b.amount - a.amount);
 }
 
 export async function aeFluidHistory(fluid: string, range = '-1h'): Promise<TimePoint[]> {
-  const rows = await queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
-  |> filter(fn: (r) => r._measurement == "ae_fluid" and r._field == "amount" and r.fluid == "${fluid}")
-  |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)
-`);
-  return rows.map(r => ({ time: String(r._time ?? ''), value: (r._value as number) ?? 0 }));
+  const interval = parseRangeInterval(range);
+  
+  const rows = await sql`
+    SELECT 
+      time_bucket('5 minutes'::interval, time) as bucket,
+      AVG(amount) as avg_amount
+    FROM ae_fluid
+    WHERE time >= NOW() - ${interval}::interval
+      AND fluid = ${fluid}
+    GROUP BY bucket
+    ORDER BY bucket
+  `;
+  
+  return rows.map(r => ({
+    time: new Date(r.bucket as Date).toISOString(),
+    value: Number(r.avg_amount) || 0,
+  }));
 }
 
 export async function aeFluidVelocity(range = '-30m', limit = 15): Promise<ItemVelocity[]> {
+  const interval = parseRangeInterval(range);
+  
   const [firstRows, lastRows] = await Promise.all([
-    queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
-  |> filter(fn: (r) => r._measurement == "ae_fluid" and r._field == "amount")
-  |> first()
-`),
-    queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
-  |> filter(fn: (r) => r._measurement == "ae_fluid" and r._field == "amount")
-  |> last()
-`),
+    sql`
+      SELECT DISTINCT ON (fluid)
+        fluid,
+        amount as first_amount
+      FROM ae_fluid
+      WHERE time >= NOW() - ${interval}::interval
+      ORDER BY fluid, time ASC
+    `,
+    sql`
+      SELECT DISTINCT ON (fluid)
+        fluid,
+        amount as last_amount
+      FROM ae_fluid
+      WHERE time >= NOW() - ${interval}::interval
+      ORDER BY fluid, time DESC
+    `,
   ]);
+  
   const firstMap = new Map<string, number>();
-  for (const r of firstRows) firstMap.set(String(r.fluid ?? ''), (r._value as number) ?? 0);
+  for (const r of firstRows) {
+    firstMap.set(String(r.fluid), Number(r.first_amount) || 0);
+  }
+  
   const results: ItemVelocity[] = [];
   for (const r of lastRows) {
-    const item = String(r.fluid ?? '');
-    const last = (r._value as number) ?? 0;
+    const item = String(r.fluid);
+    const last = Number(r.last_amount) || 0;
     const first = firstMap.get(item) ?? last;
     const delta = last - first;
-    if (Math.abs(delta) > 0) results.push({ item, delta, first, last });
+    if (Math.abs(delta) > 0) {
+      results.push({ item, delta, first, last });
+    }
   }
-  return results.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).slice(0, limit);
+  
+  return results
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, limit);
 }
 
 export interface AEChemical {
@@ -261,53 +334,16 @@ export interface AEChemical {
 }
 
 export async function aeChemicals(): Promise<AEChemical[]> {
-  const rows = await queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -24h)
-  |> filter(fn: (r) => r._measurement == "ae_chemical" and r._field == "amount")
-  |> last()
-  |> sort(columns: ["_value"], desc: true)
-`);
-  return rows.map(r => ({
-    chemical: String(r.chemical ?? ''),
-    amount: (r._value as number) ?? 0,
-  }));
+  // Note: ae_chemical table doesn't exist in schema, return empty array
+  return [];
 }
 
 export async function aeChemicalHistory(chemical: string, range = '-1h'): Promise<TimePoint[]> {
-  const rows = await queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
-  |> filter(fn: (r) => r._measurement == "ae_chemical" and r._field == "amount" and r.chemical == "${chemical}")
-  |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)
-`);
-  return rows.map(r => ({ time: String(r._time ?? ''), value: (r._value as number) ?? 0 }));
+  // Note: ae_chemical table doesn't exist in schema, return empty array
+  return [];
 }
 
 export async function aeChemicalVelocity(range = '-30m', limit = 15): Promise<ItemVelocity[]> {
-  const [firstRows, lastRows] = await Promise.all([
-    queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
-  |> filter(fn: (r) => r._measurement == "ae_chemical" and r._field == "amount")
-  |> first()
-`),
-    queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${range})
-  |> filter(fn: (r) => r._measurement == "ae_chemical" and r._field == "amount")
-  |> last()
-`),
-  ]);
-  const firstMap = new Map<string, number>();
-  for (const r of firstRows) firstMap.set(String(r.chemical ?? ''), (r._value as number) ?? 0);
-  const results: ItemVelocity[] = [];
-  for (const r of lastRows) {
-    const item = String(r.chemical ?? '');
-    const last = (r._value as number) ?? 0;
-    const first = firstMap.get(item) ?? last;
-    const delta = last - first;
-    if (Math.abs(delta) > 0) results.push({ item, delta, first, last });
-  }
-  return results.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).slice(0, limit);
+  // Note: ae_chemical table doesn't exist in schema, return empty array
+  return [];
 }

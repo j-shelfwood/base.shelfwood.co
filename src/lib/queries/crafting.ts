@@ -1,9 +1,9 @@
 /**
- * Crafting telemetry queries.
+ * Crafting telemetry queries (TimescaleDB/SQL).
  */
 
-import { queryFlux, INFLUX_BUCKET } from '../influx';
-import { type TimePoint, rangeToWindow, withHistoryFallback } from './shared';
+import { sql } from '../db';
+import { type TimePoint, parseRangeInterval, rangeToWindow } from './shared';
 
 export interface CraftingJob {
   item: string;
@@ -13,72 +13,94 @@ export interface CraftingJob {
 }
 
 export async function craftingJobs(): Promise<CraftingJob[]> {
-  // ae_crafting_job is written every AE poll cycle (~60s) while a job is running.
-  // Use a 10-cycle window (10m) to tolerate collector restarts / timing jitter.
-  const rows = await queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -10m)
-  |> filter(fn: (r) => r._measurement == "ae_crafting_job")
-  |> filter(fn: (r) => exists r.cpu_index)
-  |> group(columns: ["item", "cpu", "cpu_index", "node", "source", "_field"])
-  |> last()
-  |> group()
-  |> pivot(rowKey: ["_time", "item", "cpu", "cpu_index", "node"], columnKey: ["_field"], valueColumn: "_value")
-`);
+  const rows = await sql`
+    SELECT DISTINCT ON (node, source, item, cpu_index)
+      node,
+      source,
+      item,
+      cpu,
+      cpu_index,
+      quantity
+    FROM ae_crafting_job
+    WHERE time >= NOW() - INTERVAL '10 minutes'
+    ORDER BY node, source, item, cpu_index, time DESC
+  `;
 
   return rows.map(r => {
-    const cpuName = String(r.cpu ?? 'unnamed');
-    const idx = r.cpu_index != null ? Number(r.cpu_index) : 0;
+    const cpuName = String(r.cpu || 'unnamed');
+    const idx = Number(r.cpu_index) || 0;
     const displayCpu = cpuName.toLowerCase() === 'unnamed' ? `CPU ${idx}` : cpuName;
     return {
-      item: String(r.item ?? ''),
+      item: String(r.item),
       cpu: displayCpu,
       cpu_index: idx,
-      quantity: (r.quantity as number) ?? 0,
+      quantity: Number(r.quantity) || 0,
     };
   });
 }
 
 export async function craftingTaskCount(): Promise<number> {
-  const rows = await queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: -10m)
-  |> filter(fn: (r) => r._measurement == "ae_crafting_task" and r._field == "count")
-  |> last()
-`);
+  const rows = await sql`
+    SELECT DISTINCT ON (node, source)
+      node,
+      source,
+      count
+    FROM ae_crafting_task
+    WHERE time >= NOW() - INTERVAL '10 minutes'
+    ORDER BY node, source, time DESC
+    LIMIT 1
+  `;
+  
   if (rows.length === 0) return 0;
-  return (rows[0]?._value as number) ?? 0;
+  return Number(rows[0]?.count) || 0;
 }
 
 export async function craftingTaskHistory(range = '-1h'): Promise<TimePoint[]> {
-  return withHistoryFallback(async (r) => {
-    const rows = await queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${r})
-  |> filter(fn: (r) => r._measurement == "ae_crafting_task" and r._field == "count")
-  |> aggregateWindow(every: ${rangeToWindow(r)}, fn: mean, createEmpty: false)
-`);
-    return rows.map(row => ({ time: String(row._time ?? ''), value: (row._value as number) ?? 0 }));
-  }, range);
+  const interval = parseRangeInterval(range);
+  const window = rangeToWindow(range);
+  
+  const rows = await sql`
+    SELECT 
+      time_bucket(${window}::interval, time) as bucket,
+      AVG(count) as avg_count
+    FROM ae_crafting_task
+    WHERE time >= NOW() - ${interval}::interval
+    GROUP BY bucket
+    ORDER BY bucket
+  `;
+  
+  return rows.map(r => ({
+    time: new Date(r.bucket as Date).toISOString(),
+    value: Number(r.avg_count) || 0,
+  }));
 }
 
 export async function craftingCpuHistory(range = '-1h'): Promise<TimePoint[]> {
-  return withHistoryFallback(async (r) => {
-    const window = rangeToWindow(r);
-    const rows = await queryFlux(`
-from(bucket: "${INFLUX_BUCKET}")
-  |> range(start: ${r})
-  |> filter(fn: (r) => r._measurement == "ae_crafting_cpu" and (r._field == "busy" or r._field == "total"))
-  |> aggregateWindow(every: ${window}, fn: last, createEmpty: false)
-  |> pivot(rowKey: ["_time", "node", "source"], columnKey: ["_field"], valueColumn: "_value")
-  |> map(fn: (r) => ({
-      _time: r._time,
-      _value: if r.total > 0 then float(v: r.busy) / float(v: r.total) * 100.0 else 0.0,
-    }))
-  |> group(columns: ["_time"])
-  |> mean()
-  |> group()
-`);
-    return rows.map(row => ({ time: String(row._time ?? ''), value: (row._value as number) ?? 0 }));
-  }, range);
+  const interval = parseRangeInterval(range);
+  const window = rangeToWindow(range);
+  
+  const rows = await sql`
+    SELECT 
+      bucket,
+      CASE 
+        WHEN total > 0 
+        THEN (busy::float / total::float * 100) 
+        ELSE 0 
+      END as percent
+    FROM (
+      SELECT 
+        time_bucket(${window}::interval, time) as bucket,
+        AVG(cpu_busy) as busy,
+        AVG(cpu_total) as total
+      FROM ae_summary
+      WHERE time >= NOW() - ${interval}::interval
+      GROUP BY bucket
+    ) stats
+    ORDER BY bucket
+  `;
+  
+  return rows.map(r => ({
+    time: new Date(r.bucket as Date).toISOString(),
+    value: Number(r.percent) || 0,
+  }));
 }

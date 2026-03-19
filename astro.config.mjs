@@ -14,6 +14,7 @@ export default defineConfig({
       INFLUX_TOKEN:  envField.string({ context: 'server', access: 'secret' }),
       INFLUX_ORG:    envField.string({ context: 'server', access: 'secret', optional: true, default: 'shelfwood' }),
       INFLUX_BUCKET: envField.string({ context: 'server', access: 'secret', optional: true, default: 'mc' }),
+      DATABASE_URL:  envField.string({ context: 'server', access: 'secret' }),
     },
   },
   image: {

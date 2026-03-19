@@ -14,46 +14,36 @@ export interface ItemVelocity {
   last: number;
 }
 
-/** Pick a sensible aggregation window based on query range */
-export function rangeToWindow(range: string): string {
+/**
+ * Convert range string like "-1h", "-30m", "-7d" to PostgreSQL interval string.
+ * Examples: "-1h" → "1 hour", "-30m" → "30 minutes", "-7d" → "7 days"
+ */
+export function parseRangeInterval(range: string): string {
   const match = range.match(/^-(\d+)([smhd])$/);
-  if (!match) return '1m';
-  const n = parseInt(match[1]!);
-  const unit = match[2];
-  const minutes = unit === 's' ? n / 60 : unit === 'm' ? n : unit === 'h' ? n * 60 : n * 1440;
-  if (minutes <= 60)   return '1m';
-  if (minutes <= 360)  return '5m';
-  if (minutes <= 1440) return '15m';
-  if (minutes <= 4320) return '30m';
-  return '1h';
+  if (!match) return '1 hour';
+  const n = match[1];
+  const units: Record<string, string> = { 
+    s: 'seconds', 
+    m: 'minutes', 
+    h: 'hours', 
+    d: 'days' 
+  };
+  return `${n} ${units[match[2]!]}`;
 }
 
 /**
- * Wraps a history query function to fall back to a longer range when the
- * requested range returns no data (e.g. collector offline).  It retries with
- * -30d and returns the tail of that result matching the original point count,
- * so charts always show the last known data instead of "NO DATA".
+ * Pick a sensible aggregation window based on query range.
+ * Returns PostgreSQL interval string for use with time_bucket().
  */
-/** Parse range string to total minutes, returns null if unparseable */
-function rangeToMinutes(range: string): number | null {
+export function rangeToWindow(range: string): string {
   const match = range.match(/^-(\d+)([smhd])$/);
-  if (!match) return null;
+  if (!match) return '1 minute';
   const n = parseInt(match[1]!);
   const unit = match[2];
-  return unit === 's' ? n / 60 : unit === 'm' ? n : unit === 'h' ? n * 60 : n * 1440;
-}
-
-export async function withHistoryFallback(
-  queryFn: (range: string) => Promise<TimePoint[]>,
-  range: string
-): Promise<TimePoint[]> {
-  const result = await queryFn(range);
-  if (result.length > 0) return result;
-  // Skip fallback when original range is already wide (≥ 7 days) to avoid
-  // doubling expensive long-range queries that may OOM InfluxDB.
-  const minutes = rangeToMinutes(range);
-  if (minutes !== null && minutes >= 7 * 1440) return result;
-  // Retry with a wide window to find any recent data
-  const fallback = await queryFn('-30d');
-  return fallback;
+  const minutes = unit === 's' ? n / 60 : unit === 'm' ? n : unit === 'h' ? n * 60 : n * 1440;
+  if (minutes <= 60)   return '1 minute';
+  if (minutes <= 360)  return '5 minutes';
+  if (minutes <= 1440) return '15 minutes';
+  if (minutes <= 4320) return '30 minutes';
+  return '1 hour';
 }
