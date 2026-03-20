@@ -10,6 +10,8 @@ export interface CraftingJob {
   cpu: string;
   cpu_index: number;
   quantity: number;
+  crafted: number;
+  completion: number;
 }
 
 export async function craftingJobs(): Promise<CraftingJob[]> {
@@ -20,7 +22,9 @@ export async function craftingJobs(): Promise<CraftingJob[]> {
       item,
       cpu,
       cpu_index,
-      quantity
+      quantity,
+      crafted,
+      completion
     FROM ae_crafting_job
     WHERE time >= NOW() - INTERVAL '10 minutes'
     ORDER BY node, source, item, cpu_index, time DESC
@@ -35,6 +39,8 @@ export async function craftingJobs(): Promise<CraftingJob[]> {
       cpu: displayCpu,
       cpu_index: idx,
       quantity: Number(r.quantity) || 0,
+      crafted: Number(r.crafted) || 0,
+      completion: Number(r.completion) || 0,
     };
   });
 }
@@ -72,6 +78,34 @@ export async function craftingTaskHistory(range = '-1h'): Promise<TimePoint[]> {
   return rows.map(r => ({
     time: new Date(r.bucket as Date).toISOString(),
     value: Number(r.avg_count) || 0,
+  }));
+}
+
+export interface CraftingFrequencyItem {
+  item: string;
+  job_count: number;
+  total_qty: number;
+}
+
+export async function craftingFrequency(range = '-7d'): Promise<CraftingFrequencyItem[]> {
+  const interval = parseRangeInterval(range);
+
+  const rows = await sql`
+    SELECT
+      item,
+      COUNT(*) as job_count,
+      SUM(quantity) as total_qty
+    FROM ae_crafting_job
+    WHERE time >= NOW() - ${interval}::interval
+    GROUP BY item
+    ORDER BY COUNT(*) DESC
+    LIMIT 20
+  `;
+
+  return rows.map(r => ({
+    item: String(r.item),
+    job_count: Number(r.job_count) || 0,
+    total_qty: Number(r.total_qty) || 0,
   }));
 }
 

@@ -392,9 +392,9 @@ export async function machineTypeHistory(type: string, range = '-1h'): Promise<T
 export async function modActivityHistory(mod: string, range = '-1h'): Promise<TimePoint[]> {
   const interval = parseRangeInterval(range);
   const window = rangeToWindow(range);
-  
+
   const rows = await sql`
-    SELECT 
+    SELECT
       time_bucket(${window}::interval, time) as bucket,
       COUNT(DISTINCT name) as active_count
     FROM machine_activity
@@ -405,9 +405,117 @@ export async function modActivityHistory(mod: string, range = '-1h'): Promise<Ti
     GROUP BY bucket
     ORDER BY bucket
   `;
-  
+
   return rows.map(r => ({
     time: new Date(r.bucket as Date).toISOString(),
     value: Number(r.active_count) || 0,
+  }));
+}
+
+export interface MachineUtilisation {
+  name: string;
+  type: string;
+  mod: string;
+  util_pct: number;
+  /** 'active_flag' for Mekanism (machine_activity.active), 'slot' for MI (mi_machine_slot occupancy) */
+  signal: 'active_flag' | 'slot';
+}
+
+export async function machineUtilisation(range = '-1h'): Promise<MachineUtilisation[]> {
+  const interval = parseRangeInterval(range);
+
+  // Mekanism: active flag is reliable
+  const mekRows = await sql`
+    SELECT
+      name,
+      type,
+      mod,
+      COUNT(*) as total_ticks,
+      SUM(active) as active_ticks
+    FROM machine_activity
+    WHERE time >= NOW() - ${interval}::interval
+      AND mod = 'mekanism'
+      AND type != 'me_bridge'
+    GROUP BY name, type, mod
+  `;
+
+  // MI: active flag is never set by collector — derive from slot occupancy.
+  // Use machine_activity tick buckets as denominator (consistent ~18s cadence),
+  // slot active buckets as numerator (~97s cadence, only written when occupied).
+  const miRows = await sql`
+    SELECT
+      ma_stats.name,
+      ma_stats.type,
+      ma_stats.mod,
+      ma_stats.total_ticks,
+      COALESCE(slot_stats.active_buckets, 0) as active_buckets,
+      ROUND(
+        COALESCE(slot_stats.active_buckets, 0)::numeric
+        / NULLIF(
+            (SELECT COUNT(DISTINCT time_bucket('97 seconds', ma2.time))
+             FROM machine_activity ma2
+             WHERE ma2.name = ma_stats.name
+               AND ma2.time >= NOW() - ${interval}::interval
+            ), 0
+          ) * 100
+      , 1) as util_pct
+    FROM (
+      SELECT name, type, mod, COUNT(*) as total_ticks
+      FROM machine_activity
+      WHERE time >= NOW() - ${interval}::interval
+        AND mod = 'modern_industrialization'
+        AND type != 'me_bridge'
+      GROUP BY name, type, mod
+    ) ma_stats
+    LEFT JOIN (
+      SELECT name, COUNT(DISTINCT time_bucket('97 seconds', time)) as active_buckets
+      FROM mi_machine_slot
+      WHERE time >= NOW() - ${interval}::interval
+        AND count > 0
+      GROUP BY name
+    ) slot_stats ON slot_stats.name = ma_stats.name
+  `;
+
+  const mek: MachineUtilisation[] = mekRows.map(r => {
+    const total = Number(r.total_ticks) || 1;
+    const active = Number(r.active_ticks) || 0;
+    return {
+      name: String(r.name),
+      type: String(r.type),
+      mod: String(r.mod),
+      util_pct: (active / total) * 100,
+      signal: 'active_flag',
+    };
+  });
+
+  const mi: MachineUtilisation[] = miRows.map(r => ({
+    name: String(r.name),
+    type: String(r.type),
+    mod: String(r.mod),
+    util_pct: Math.min(100, Number(r.util_pct) || 0),
+    signal: 'slot',
+  }));
+
+  return [...mek, ...mi].sort((a, b) => b.util_pct - a.util_pct || a.name.localeCompare(b.name));
+}
+
+export async function machineSparkline(name: string, range = '-1h'): Promise<TimePoint[]> {
+  const interval = parseRangeInterval(range);
+  const window = rangeToWindow(range);
+
+  const rows = await sql`
+    SELECT
+      time_bucket(${window}::interval, time) as bucket,
+      AVG(active) as avg_active
+    FROM machine_activity
+    WHERE time >= NOW() - ${interval}::interval
+      AND name = ${name}
+    GROUP BY bucket
+    ORDER BY bucket
+  `;
+
+  return rows.map(r => ({
+    time: new Date(r.bucket as Date).toISOString(),
+    value: Number(r.avg_active) || 0,
   }));
 }

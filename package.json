@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.0.1",
   "scripts": {
-    "dev": "astro dev",
+    "dev": "bash scripts/dev.sh",
     "build": "node ./node_modules/.bin/astro build",
     "preview": "astro preview",
     "astro": "astro",

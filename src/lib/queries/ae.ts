@@ -208,25 +208,40 @@ export interface AECPUs {
 }
 
 export async function aeCPUs(): Promise<AECPUs> {
-  const rows = await sql`
-    SELECT DISTINCT ON (node, source)
-      node,
-      source,
-      total,
-      busy
-    FROM ae_crafting_cpu
-    WHERE time >= NOW() - INTERVAL '24 hours'
-    ORDER BY node, source, time DESC
-  `;
+  const [summaryRows, cpuRows] = await Promise.all([
+    sql`
+      SELECT DISTINCT ON (node, source)
+        node, source, total, busy
+      FROM ae_crafting_cpu
+      WHERE time >= NOW() - INTERVAL '24 hours'
+      ORDER BY node, source, time DESC
+    `,
+    sql`
+      SELECT DISTINCT ON (node, cpu_index)
+        node, source, cpu, cpu_index, storage, co_processors, is_busy
+      FROM ae_cpu
+      WHERE time >= NOW() - INTERVAL '24 hours'
+      ORDER BY node, cpu_index, time DESC
+    `,
+  ]);
 
-  const total = rows.length > 0 ? (Number(rows[0]?.total) || 0) : 0;
-  const busy = rows.length > 0 ? (Number(rows[0]?.busy) || 0) : 0;
+  const total = summaryRows.length > 0 ? (Number(summaryRows[0]?.total) || 0) : 0;
+  const busy  = summaryRows.length > 0 ? (Number(summaryRows[0]?.busy)  || 0) : 0;
+
+  const cpus = cpuRows.map(r => ({
+    name:         String(r.cpu || `CPU ${r.cpu_index}`),
+    storage:      Number(r.storage) || 0,
+    coProcessors: Number(r.co_processors) || 0,
+    busy:         Number(r.is_busy) > 0,
+  }));
 
   return {
-    total,
-    busy,
-    busy_percent: total > 0 ? (busy / total) * 100 : 0,
-    cpus: [],
+    total:        total || cpus.length,
+    busy:         busy  || cpus.filter(c => c.busy).length,
+    busy_percent: (total || cpus.length) > 0
+      ? ((busy || cpus.filter(c => c.busy).length) / (total || cpus.length)) * 100
+      : 0,
+    cpus,
   };
 }
 

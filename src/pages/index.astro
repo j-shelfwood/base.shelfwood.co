@@ -357,9 +357,42 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       </div>
     </Panel>
 
+    <!-- Machine utilisation panel -->
+    <Panel title="MACHINE UTILISATION" raised class="mb-6">
+      <div id="util-leaderboard">
+        <p class="font-mc text-sm text-mc-muted">Loading...</p>
+      </div>
+      <div class="mt-3 flex items-center justify-between">
+        <span id="util-idle-summary" class="font-mc text-sm text-mc-muted"></span>
+        <button id="util-modal-btn" class="hidden mc-slot px-3 py-1 font-mc text-sm text-mc-diamond hover:text-mc-white">
+          VIEW ALL →
+        </button>
+      </div>
+    </Panel>
+
+    <!-- Machine utilisation modal -->
+    <div id="util-modal" class="fixed inset-0 z-[100] hidden" role="dialog" aria-modal="true">
+      <div id="util-modal-backdrop" class="absolute inset-0 bg-black/80"></div>
+      <div class="absolute inset-4 md:inset-8 lg:inset-16 bg-mc-deep flex flex-col pixel-border overflow-hidden">
+        <div class="flex items-center gap-3 px-4 py-3 border-b-2 border-mc-cobble shrink-0">
+          <span class="font-mc text-mc-diamond text-base">MACHINE UTILISATION</span>
+          <span id="util-modal-range" class="font-mc text-sm text-mc-muted"></span>
+          <button id="util-modal-close" class="mc-slot px-3 py-1.5 font-mc text-base text-mc-redstone hover:text-mc-white ml-auto">✕ CLOSE</button>
+        </div>
+        <div class="flex gap-2 px-4 py-2 border-b border-mc-cobble/50 shrink-0">
+          <button data-util-filter="all"    class="util-filter-btn mc-slot px-3 py-1 font-mc text-sm text-mc-diamond">ALL</button>
+          <button data-util-filter="active" class="util-filter-btn mc-slot px-3 py-1 font-mc text-sm text-mc-muted">ACTIVE</button>
+          <button data-util-filter="idle"   class="util-filter-btn mc-slot px-3 py-1 font-mc text-sm text-mc-muted">IDLE</button>
+          <button data-util-filter="mekanism"           class="util-filter-btn mc-slot px-3 py-1 font-mc text-sm text-mc-muted">MEKANISM</button>
+          <button data-util-filter="modern_industrialization" class="util-filter-btn mc-slot px-3 py-1 font-mc text-sm text-mc-muted">MI</button>
+        </div>
+        <div id="util-modal-list" class="flex-1 overflow-y-auto divide-y divide-mc-cobble/30 px-4"></div>
+      </div>
+    </div>
+
     <Panel title="MEKANISM MACHINES" raised noPadding class="mb-6">
       <div id="mek-grid" class="p-4 flex flex-wrap gap-6">
-        {Object.keys(mekByType).length === 0 && <p class="font-mc text-base text-mc-muted py-2">No Mekanism machine data</p>}
+        {Object.keys(mekByType).length === 0 && <p id="mek-empty" class="font-mc text-base text-mc-muted py-2">No Mekanism machine data</p>}
         {Object.entries(mekByType).map(([type, machines]) => {
           const active = machines.filter(m => m.active).length;
           const col = colourFor(type);
@@ -421,7 +454,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
 
     <Panel title="MODERN INDUSTRIALIZATION" raised noPadding>
       <div id="mi-grid" class="p-4 flex flex-wrap gap-6">
-        {Object.keys(miByType).length === 0 && <p class="font-mc text-base text-mc-muted py-2">No MI machine data</p>}
+        {Object.keys(miByType).length === 0 && <p id="mi-empty" class="font-mc text-base text-mc-muted py-2">No MI machine data</p>}
         {Object.entries(miByType).map(([type, machines]) => {
           const active = machines.filter(m => m.active).length;
           const col = miColourFor(type.replace('modern_industrialization:', '').replace(/_/g, ' '));
@@ -749,15 +782,28 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     <Panel title="ACTIVE JOBS" raised class="mb-6">
       <div id="active-jobs-list" class="space-y-2">
         {jobs.length === 0 && <p class="font-mc text-base text-mc-muted py-2">No active crafting jobs</p>}
-        {jobs.map(j => (
-          <div class="flex items-center justify-between pixel-border px-3 py-2 bg-mc-stone/20">
-            <div class="flex flex-col">
-              <span class="font-mc text-base text-mc-white capitalize">{itemLabel(j.item)}</span>
-              <span class="font-mc text-sm text-mc-muted">{j.cpu} · CPU {j.cpu_index}</span>
+        {jobs.map(j => {
+          const pct = Math.min(100, (j.completion ?? 0) * 100);
+          return (
+            <div class="pixel-border px-3 py-2 bg-mc-stone/20">
+              <div class="flex items-center justify-between">
+                <div class="flex flex-col">
+                  <span class="font-mc text-base text-mc-white capitalize">{itemLabel(j.item)}</span>
+                  <span class="font-mc text-sm text-mc-muted">{j.cpu} · CPU {j.cpu_index}</span>
+                </div>
+                <span class="font-mc text-base text-mc-amethyst">{fmtQty(j.quantity)}×</span>
+              </div>
+              {pct > 0 && (
+                <div class="mt-1.5 flex items-center gap-2">
+                  <div class="flex-1 h-1.5 bg-mc-shadow">
+                    <div class="h-full bg-mc-amethyst transition-all duration-500" style={`width:${pct.toFixed(1)}%`} />
+                  </div>
+                  <span class="font-mc text-xs text-mc-amethyst w-10 text-right shrink-0">{pct.toFixed(0)}%</span>
+                </div>
+              )}
             </div>
-            <span class="font-mc text-base text-mc-amethyst">{fmtQty(j.quantity)}×</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </Panel>
 
@@ -814,6 +860,24 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       <div class="mt-4">
         <ProgressBar value={cpus.busy} max={cpus.total || 1} colour="amethyst"
           label="CPU Utilisation" showPercent id="progress-cpu" />
+      </div>
+    </Panel>
+
+    <!-- Crafting frequency (populated client-side) -->
+    <Panel title="MOST CRAFTED (7D)" raised class="mt-6">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          <span class="font-mc text-sm text-mc-gold block mb-2">BY JOB COUNT</span>
+          <div id="craft-freq-jobs" class="space-y-1">
+            <p class="font-mc text-sm text-mc-muted">Loading...</p>
+          </div>
+        </div>
+        <div>
+          <span class="font-mc text-sm text-mc-amethyst block mb-2">BY TOTAL QUANTITY</span>
+          <div id="craft-freq-qty" class="space-y-1">
+            <p class="font-mc text-sm text-mc-muted">Loading...</p>
+          </div>
+        </div>
       </div>
     </Panel>
   </section>
@@ -883,12 +947,12 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       fetchJSON('/api/ae-summary'),
       fetchJSON('/api/machines'),
     ]);
-    if (eRes.summary) {
+    if (eRes?.summary) {
       const s = eRes.summary;
       setEl('stat-stored-fe', fmt(s.stored_fe) + ' FE');
       setEl('stat-energy-pct', s.percent.toFixed(1) + '%');
     }
-    if (eRes.flow?.length >= 2) {
+    if (eRes?.flow?.length >= 2) {
       const gen = eRes.flow[0]?.rate_fe_t ?? 0;
       const con = eRes.flow[1]?.rate_fe_t ?? 0;
       const net = gen - con;
@@ -899,7 +963,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       const capacity = eRes.summary?.capacity_fe ?? 0;
       setEl('stat-eta', energyEta(stored, capacity, net));
     }
-    if (aeRes.summary) {
+    if (aeRes?.summary) {
       const a = aeRes.summary;
       setEl('stat-items', fmt(a.items_total));
       setEl('stat-items-unique', fmt(a.items_unique));
@@ -907,18 +971,18 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       setEl('stat-storage-pct', a.item_storage_total > 0 ? ((a.item_storage_used / a.item_storage_total) * 100).toFixed(1) + '%' : '—');
       setEl('stat-cpus', `${aeRes.cpus?.busy ?? 0}/${aeRes.cpus?.total ?? 0}`);
     }
-    if (mRes.summary) {
+    if (mRes?.summary) {
       setEl('stat-machines-active', fmt(mRes.summary.active_machines));
       setEl('stat-machines-total', fmt(mRes.summary.total_machines));
     }
     // Status indicators
-    const energyPct = eRes.summary?.percent ?? 0;
-    const su = aeRes.summary?.item_storage_used ?? 0;
-    const st = aeRes.summary?.item_storage_total ?? 1;
+    const energyPct = eRes?.summary?.percent ?? 0;
+    const su = aeRes?.summary?.item_storage_used ?? 0;
+    const st = aeRes?.summary?.item_storage_total ?? 1;
     const storageUsePct = st > 0 ? (su / st) * 100 : 0;
-    const aeOnline = (aeRes.summary?.items_total ?? 0) > 0;
-    const machActive = mRes.summary?.active_machines ?? 0;
-    const machTotal  = mRes.summary?.total_machines ?? 0;
+    const aeOnline = (aeRes?.summary?.items_total ?? 0) > 0;
+    const machActive = mRes?.summary?.active_machines ?? 0;
+    const machTotal  = mRes?.summary?.total_machines ?? 0;
 
     // Energy bar + label
     {
@@ -1060,21 +1124,174 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   async function refreshMachines() {
     // Fast path: current-state grids load immediately
     const data = await fetchJSON<any>(`/api/machines?range=${globalRange}`);
-    if (data.error) return;
+    if (!data || data.error) return;
     if (data.summary) {
       setEl('stat-mach-active', String(data.summary.active_machines));
       setEl('stat-mach-total', String(data.summary.total_machines));
       setEl('stat-mach-pct', data.summary.active_percent.toFixed(1) + '%');
     }
-    if (data.mekanism) renderMachineGrid('mek-grid', data.mekanism, buildMekCell, mColour, fmtType);
-    if (data.mi) renderMachineGrid('mi-grid', data.mi, buildMICell, (t) => miColour(t.replace('modern_industrialization:', '').replace(/_/g, ' ')), (t) => t.replace('modern_industrialization:', '').replace(/_/g, ' '));
-    // Slow path: history charts load separately so grids never wait on range scans
+    if (data.mekanism) {
+      document.getElementById('mek-empty')?.remove();
+      renderMachineGrid('mek-grid', data.mekanism, buildMekCell, mColour, fmtType);
+    }
+    if (data.mi) {
+      document.getElementById('mi-empty')?.remove();
+      renderMachineGrid('mi-grid', data.mi, buildMICell, (t) => miColour(t.replace('modern_industrialization:', '').replace(/_/g, ' ')), (t) => t.replace('modern_industrialization:', '').replace(/_/g, ' '));
+    }
+    // Slow path: history charts + utilisation leaderboard
     fetchJSON<any>(`/api/machines?range=${globalRange}&history=1`).then(h => {
       if (h.activityHistory)    renderChart('chart-mach-activity',  [{ points: h.activityHistory, colour: 'var(--color-mc-emerald)', fill: true }]);
       if (h.activityPctHistory) renderChart('chart-mach-active-pct', [{ points: h.activityPctHistory, colour: 'var(--color-mc-gold)', fill: true, suffix: '%' }]);
       if (h.mekHistory) renderChart('chart-mek-history', [{ points: h.mekHistory, colour: 'var(--color-mc-amethyst)', fill: true }]);
       if (h.miHistory)  renderChart('chart-mi-history',  [{ points: h.miHistory, colour: 'var(--color-mc-diamond)', fill: true }]);
+      if (h.utilisation) renderUtilLeaderboard(h.utilisation);
     }).catch(() => {});
+  }
+
+  // ── Machine utilisation ────────────────────────────────────────────────────
+  type UtilRow = { name: string; type: string; mod: string; util_pct: number; signal: string };
+  let utilAllRows: UtilRow[] = [];
+
+  function utilRowHtml(r: UtilRow, maxPct: number): string {
+    const label = r.name.replace(/^.*:/, '').replace(/_/g, ' ');
+    const typeLabel = r.type.replace(/^.*:/, '').replace(/_/g, ' ');
+    const modLabel = r.mod === 'mekanism' ? 'MEK' : 'MI';
+    const colour = r.util_pct === 0 ? 'bg-mc-stone' : r.util_pct < 25 ? 'bg-mc-redstone' : r.util_pct < 60 ? 'bg-mc-gold' : 'bg-mc-emerald';
+    const textColour = r.util_pct === 0 ? 'text-mc-stone' : r.util_pct < 25 ? 'text-mc-redstone' : r.util_pct < 60 ? 'text-mc-gold' : 'text-mc-emerald';
+    const barPct = maxPct > 0 ? Math.min(100, (r.util_pct / maxPct) * 100) : 0;
+    return `<div class="flex items-center gap-2 py-1">
+      <span class="font-mc text-xs text-mc-stone w-8 shrink-0">${modLabel}</span>
+      <span class="font-mc text-xs text-mc-muted truncate w-40 shrink-0" title="${r.name}">${label}</span>
+      <div class="flex-1 mc-progress-track"><div class="mc-progress-fill ${colour}" style="width:${barPct.toFixed(1)}%"></div></div>
+      <span class="font-mc text-xs ${textColour} w-12 text-right shrink-0">${r.util_pct.toFixed(1)}%</span>
+    </div>`;
+  }
+
+  function renderUtilLeaderboard(rows: UtilRow[]) {
+    utilAllRows = rows;
+    const leaderEl   = document.getElementById('util-leaderboard');
+    const summaryEl  = document.getElementById('util-idle-summary');
+    const modalBtn   = document.getElementById('util-modal-btn');
+    if (!leaderEl) return;
+
+    const active = rows.filter(r => r.util_pct > 0);
+    const idle   = rows.filter(r => r.util_pct === 0);
+    const top    = active.slice(0, 10);
+    const maxPct = top[0]?.util_pct ?? 100;
+
+    if (top.length === 0) {
+      leaderEl.innerHTML = '<p class="font-mc text-sm text-mc-muted">No activity in range</p>';
+    } else {
+      leaderEl.innerHTML = top.map(r => utilRowHtml(r, maxPct)).join('');
+    }
+
+    if (summaryEl) {
+      if (idle.length === 0) {
+        summaryEl.textContent = 'All machines active';
+        summaryEl.className = 'font-mc text-sm text-mc-emerald';
+      } else {
+        const hiddenActive = active.length - top.length;
+        const parts = [];
+        if (hiddenActive > 0) parts.push(`+${hiddenActive} more active`);
+        parts.push(`${idle.length} idle`);
+        summaryEl.textContent = parts.join(' · ');
+        summaryEl.className = 'font-mc text-sm text-mc-muted';
+      }
+    }
+    if (modalBtn) modalBtn.classList.remove('hidden');
+  }
+
+  // ── Utilisation modal ─────────────────────────────────────────────────────
+  let utilFilter = 'all';
+
+  function renderUtilModal() {
+    const listEl = document.getElementById('util-modal-list');
+    if (!listEl) return;
+    let rows = utilAllRows;
+    if (utilFilter === 'active')              rows = rows.filter(r => r.util_pct > 0);
+    else if (utilFilter === 'idle')           rows = rows.filter(r => r.util_pct === 0);
+    else if (utilFilter === 'mekanism')       rows = rows.filter(r => r.mod === 'mekanism');
+    else if (utilFilter === 'modern_industrialization') rows = rows.filter(r => r.mod === 'modern_industrialization');
+    const maxPct = rows[0]?.util_pct ?? 100;
+    listEl.innerHTML = rows.length === 0
+      ? '<p class="font-mc text-sm text-mc-muted px-0 py-4">No machines match filter</p>'
+      : rows.map(r => utilRowHtml(r, maxPct)).join('');
+    const rangeEl = document.getElementById('util-modal-range');
+    if (rangeEl) rangeEl.textContent = `${globalRange.replace('-', '')} · ${rows.length} machines`;
+  }
+
+  function openUtilModal() {
+    renderUtilModal();
+    const modal = document.getElementById('util-modal');
+    if (modal) modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeUtilModal() {
+    const modal = document.getElementById('util-modal');
+    if (modal) modal.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  document.getElementById('util-modal-btn')?.addEventListener('click', openUtilModal);
+  document.getElementById('util-modal-close')?.addEventListener('click', closeUtilModal);
+  document.getElementById('util-modal-backdrop')?.addEventListener('click', closeUtilModal);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeUtilModal();
+    }
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('.util-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      utilFilter = btn.dataset.utilFilter ?? 'all';
+      document.querySelectorAll<HTMLButtonElement>('.util-filter-btn').forEach(b => {
+        b.className = `util-filter-btn mc-slot px-3 py-1 font-mc text-sm ${b === btn ? 'text-mc-diamond' : 'text-mc-muted'}`;
+      });
+      renderUtilModal();
+    });
+  });
+
+  // ── Machine sparkline on hover ────────────────────────────────────────────
+  const sparklineCache = new Map<string, { time: string; value: number }[]>();
+  let sparklineFetchTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function attachSparklineHover(containerId: string) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.addEventListener('mouseenter', async (e) => {
+      const cell = (e.target as HTMLElement).closest('[data-machine]') as HTMLElement | null;
+      if (!cell) return;
+      const name = cell.dataset.machine;
+      if (!name) return;
+      const tooltip = cell.querySelector('.group-hover\\:flex') as HTMLElement | null;
+      if (!tooltip) return;
+      // Check if sparkline already rendered
+      if (tooltip.querySelector('[data-sparkline]')) return;
+
+      if (sparklineFetchTimer) clearTimeout(sparklineFetchTimer);
+      sparklineFetchTimer = setTimeout(async () => {
+        let points = sparklineCache.get(name);
+        if (!points) {
+          const data = await fetchJSON<any>(`/api/machines?sparkline=${encodeURIComponent(name)}&range=${globalRange}`);
+          points = data?.sparkline ?? [];
+          sparklineCache.set(name, points!);
+        }
+        if (!points || points.length < 2) return;
+        // Build tiny sparkline SVG (60×20)
+        const vals = points.map((p: { value: number }) => p.value);
+        const minV = Math.min(...vals), maxV = Math.max(...vals);
+        const vRange = maxV - minV || 1;
+        const W = 120, H = 20, pad = 2;
+        const xs = points.map((_: unknown, i: number) => pad + (i / (points!.length - 1)) * (W - pad * 2));
+        const ys = vals.map((v: number) => H - pad - ((v - minV) / vRange) * (H - pad * 2));
+        const d = xs.map((x: number, i: number) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i]!.toFixed(1)}`).join(' ');
+        const sparkEl = document.createElement('div');
+        sparkEl.dataset.sparkline = '1';
+        sparkEl.className = 'mt-1 border-t border-mc-cobble/30 pt-1';
+        sparkEl.innerHTML = `<span class="font-mc text-xs text-mc-muted block mb-0.5">ACTIVITY</span><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><path d="${d} L${xs[xs.length-1]!.toFixed(1)},${H} L${xs[0]!.toFixed(1)},${H} Z" fill="var(--color-mc-emerald)" opacity="0.15"/><path d="${d}" fill="none" stroke="var(--color-mc-emerald)" stroke-width="1.5"/></svg>`;
+        tooltip.appendChild(sparkEl);
+      }, 120);
+    }, true);
   }
 
   // ── Storage refresh ────────────────────────────────────────────────────────
@@ -1279,9 +1496,48 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     }
   }
 
+  let freqLoaded = false;
+
+  function renderCraftingFrequency(items: { item: string; job_count: number; total_qty: number }[]) {
+    const jobsEl = document.getElementById('craft-freq-jobs');
+    const qtyEl  = document.getElementById('craft-freq-qty');
+    if (jobsEl) {
+      const maxJobs = items[0]?.job_count ?? 1;
+      jobsEl.innerHTML = items.length === 0
+        ? '<p class="font-mc text-sm text-mc-muted">No data</p>'
+        : items.map(r => {
+            const label = r.item.replace(/^.*:/, '').replace(/_/g, ' ');
+            const pct = Math.min(100, (r.job_count / maxJobs) * 100);
+            return `<div class="flex items-center gap-2">
+              <span class="font-mc text-xs text-mc-muted truncate w-36 shrink-0" title="${r.item}">${label}</span>
+              <div class="flex-1 mc-progress-track"><div class="mc-progress-fill bg-mc-gold" style="width:${pct.toFixed(1)}%"></div></div>
+              <span class="font-mc text-xs text-mc-gold w-10 text-right shrink-0">${r.job_count}</span>
+            </div>`;
+          }).join('');
+    }
+    if (qtyEl) {
+      const sorted = [...items].sort((a, b) => b.total_qty - a.total_qty);
+      const maxQty = sorted[0]?.total_qty ?? 1;
+      qtyEl.innerHTML = sorted.length === 0
+        ? '<p class="font-mc text-sm text-mc-muted">No data</p>'
+        : sorted.map(r => {
+            const label = r.item.replace(/^.*:/, '').replace(/_/g, ' ');
+            const pct = Math.min(100, (r.total_qty / maxQty) * 100);
+            const qty = r.total_qty >= 1_000_000 ? (r.total_qty / 1_000_000).toFixed(1) + 'M'
+                      : r.total_qty >= 1_000     ? (r.total_qty / 1_000).toFixed(1) + 'K'
+                      : String(r.total_qty);
+            return `<div class="flex items-center gap-2">
+              <span class="font-mc text-xs text-mc-muted truncate w-36 shrink-0" title="${r.item}">${label}</span>
+              <div class="flex-1 mc-progress-track"><div class="mc-progress-fill bg-mc-amethyst" style="width:${pct.toFixed(1)}%"></div></div>
+              <span class="font-mc text-xs text-mc-amethyst w-12 text-right shrink-0">${qty}</span>
+            </div>`;
+          }).join('');
+    }
+  }
+
   async function refreshCrafting() {
     const data = await fetchJSON<any>(`/api/crafting?range=${globalRange}`);
-    if (data.error) return;
+    if (!data || data.error) return;
     if (data.cpus) renderCrafting(data.cpus, data.jobs ?? []);
     if (data.taskHistory) renderChart('chart-task-queue', [{ points: data.taskHistory, colour: 'var(--color-mc-gold)', fill: true }]);
     if (data.cpuHistory)  renderChart('chart-cpu-util',   [{ points: data.cpuHistory, colour: 'var(--color-mc-amethyst)', fill: true, suffix: '%' }]);
@@ -1290,16 +1546,33 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     if (jobsList && data.jobs) {
       jobsList.innerHTML = data.jobs.length === 0
         ? '<p class="font-mc text-base text-mc-muted py-2">No active crafting jobs</p>'
-        : data.jobs.map((j: {item:string;cpu:string;cpu_index:number;quantity:number}) => {
+        : data.jobs.map((j: {item:string;cpu:string;cpu_index:number;quantity:number;crafted:number;completion:number}) => {
             const label = j.item.replace(/^.*:/, '').replace(/_/g, ' ');
-            return `<div class="flex items-center justify-between pixel-border px-3 py-2 bg-mc-stone/20">
-              <div class="flex flex-col">
-                <span class="font-mc text-base text-mc-white capitalize">${label}</span>
-                <span class="font-mc text-sm text-mc-muted">${j.cpu} · CPU ${j.cpu_index}</span>
+            const pct = Math.min(100, (j.completion ?? 0) * 100);
+            const progressBar = pct > 0
+              ? `<div class="mt-1.5 flex items-center gap-2">
+                  <div class="flex-1 h-1.5 bg-mc-shadow"><div class="h-full bg-mc-amethyst transition-all duration-500" style="width:${pct.toFixed(1)}%"></div></div>
+                  <span class="font-mc text-xs text-mc-amethyst w-10 text-right shrink-0">${pct.toFixed(0)}%</span>
+                </div>`
+              : '';
+            return `<div class="pixel-border px-3 py-2 bg-mc-stone/20">
+              <div class="flex items-center justify-between">
+                <div class="flex flex-col">
+                  <span class="font-mc text-base text-mc-white capitalize">${label}</span>
+                  <span class="font-mc text-sm text-mc-muted">${j.cpu} · CPU ${j.cpu_index}</span>
+                </div>
+                <span class="font-mc text-base text-mc-amethyst">${fmtQty(j.quantity)}×</span>
               </div>
-              <span class="font-mc text-base text-mc-amethyst">${fmtQty(j.quantity)}×</span>
+              ${progressBar}
             </div>`;
           }).join('');
+    }
+    // Load crafting frequency once (it's historical, no need to poll every 5s)
+    if (!freqLoaded) {
+      freqLoaded = true;
+      fetchJSON<any>(`/api/crafting?freq=1&range=-7d`).then(fd => {
+        if (fd?.frequency) renderCraftingFrequency(fd.frequency);
+      }).catch(() => {});
     }
   }
 
@@ -1479,8 +1752,12 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
 
   sectionVisible('storage-velocity', loadVelocity, VELOCITY_MS);
 
-  // Machines section
-  sectionVisible('machines', refreshMachines, MACHINES_MS);
+  // Machines section — also attach sparkline hover after first load
+  sectionVisible('machines', async () => {
+    await refreshMachines();
+    attachSparklineHover('mek-grid');
+    attachSparklineHover('mi-grid');
+  }, MACHINES_MS);
 
   // Crafting section
   sectionVisible('crafting', refreshCrafting, CRAFTING_MS);
@@ -1526,6 +1803,12 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
         if (mData?.activityPctHistory) renderChart('chart-mach-active-pct', [{ points: mData.activityPctHistory, colour: 'var(--color-mc-gold)',     fill: true, suffix: '%' }]);
         if (mData?.mekHistory)         renderChart('chart-mek-history',      [{ points: mData.mekHistory,         colour: 'var(--color-mc-amethyst)', fill: true }]);
         if (mData?.miHistory)          renderChart('chart-mi-history',       [{ points: mData.miHistory,          colour: 'var(--color-mc-diamond)',  fill: true }]);
+        if (mData?.utilisation) {
+          renderUtilLeaderboard(mData.utilisation);
+          const modal = document.getElementById('util-modal');
+          if (modal && !modal.classList.contains('hidden')) renderUtilModal();
+        }
+        sparklineCache.clear(); // invalidate cached sparklines for new range
       }).catch(() => undefined)
     );
 

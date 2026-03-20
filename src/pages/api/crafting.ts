@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { craftingJobs, aeCPUs, craftingTaskCount, craftingTaskHistory, craftingCpuHistory } from '@/lib/queries';
+import { craftingJobs, aeCPUs, craftingTaskCount, craftingTaskHistory, craftingCpuHistory, craftingFrequency } from '@/lib/queries';
 
 const VALID_RANGE = /^-\d+[smhd]$/;
 const MAX_RANGE_DAYS = 30;
@@ -19,6 +19,12 @@ export const GET: APIRoute = async ({ request }) => {
     const url = new URL(request.url);
     const rawRange = url.searchParams.get('range');
     const range = capRange(rawRange && VALID_RANGE.test(rawRange) ? rawRange : '-1h');
+
+    const freqOnly = url.searchParams.get('freq') === '1';
+    if (freqOnly) {
+      const frequency = await craftingFrequency(range);
+      return Response.json({ frequency });
+    }
 
     const [jobs, cpus, taskCount, taskHistory, cpuHistory] = await Promise.all([
       craftingJobs(),

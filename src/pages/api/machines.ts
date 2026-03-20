@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { machineSummary, machineTypes, mekanismMachines, miMachines, machineActivityHistory, machineActivePercentHistory, miMachineSlotItems, miMachineFluids, machineTypeHistory, modActivityHistory } from '@/lib/queries';
+import { machineSummary, machineTypes, mekanismMachines, miMachines, machineActivityHistory, machineActivePercentHistory, miMachineSlotItems, miMachineFluids, machineTypeHistory, modActivityHistory, machineUtilisation, machineSparkline } from '@/lib/queries';
 
 const VALID_RANGE = /^-\d+[smhd]$/;
 const MAX_RANGE_DAYS = 30;
@@ -21,6 +21,13 @@ export const GET: APIRoute = async ({ request }) => {
     const range = capRange(rawRange && VALID_RANGE.test(rawRange) ? rawRange : '-1h');
     const typeHistParam = url.searchParams.get('typeHistory');
 
+    // If sparkline param given, return single machine time series
+    const sparklineParam = url.searchParams.get('sparkline');
+    if (sparklineParam) {
+      const sparkline = await machineSparkline(sparklineParam, range);
+      return Response.json({ sparkline });
+    }
+
     // If typeHistory param given, return just that series
     if (typeHistParam) {
       const history = await machineTypeHistory(typeHistParam, range);
@@ -31,13 +38,14 @@ export const GET: APIRoute = async ({ request }) => {
 
     if (historyOnly) {
       // Slow path: range queries only — called separately after grid renders
-      const [activityHistory, activityPctHistory, mekHistory, miHistory] = await Promise.all([
+      const [activityHistory, activityPctHistory, mekHistory, miHistory, utilisation] = await Promise.all([
         machineActivityHistory(range),
         machineActivePercentHistory(range),
         modActivityHistory('mekanism', range),
         modActivityHistory('modern_industrialization', range),
+        machineUtilisation(range),
       ]);
-      return Response.json({ activityHistory, activityPctHistory, mekHistory, miHistory });
+      return Response.json({ activityHistory, activityPctHistory, mekHistory, miHistory, utilisation });
     }
 
     // Fast path: current-state queries only (last() — no range scan)
