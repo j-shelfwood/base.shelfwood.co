@@ -818,7 +818,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
             data-cpu={cpu.name} data-cpu-index={i + 1} data-busy={cpu.busy ? '1' : '0'}>
             {cpu.busy && <div class="absolute inset-0 animate-pulse opacity-10 bg-mc-amethyst pointer-events-none" />}
             <span class={`font-mc text-base z-10 ${cpu.busy ? 'text-mc-amethyst' : 'text-mc-muted'}`}>
-              {cpu.name.replace(/[^0-9]/g, '') || cpu.name.slice(-2)}
+              {cpu.name.replace(/[^0-9]/g, '') || String(enrichedCpus.indexOf(cpu) + 1)}
             </span>
             <span class:list={['w-2 h-2 z-10', cpu.busy ? 'bg-mc-emerald shadow-[0_0_6px_var(--color-mc-emerald)]' : 'bg-mc-stone']} />
             {cpu.job ? (
@@ -1433,8 +1433,9 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
   type Job  = { item: string; cpu: string; cpu_index: number; quantity: number };
   type CPU  = { name: string; storage: number; coProcessors: number; busy: boolean };
 
-  function buildCpuCell(cpu: CPU, job: Job | null): string {
-    const num = cpu.name.replace(/[^0-9]/g, '') || cpu.name.slice(-2);
+  function buildCpuCell(cpu: CPU, job: Job | null, cpuIndex?: number): string {
+    const digits = cpu.name.replace(/[^0-9]/g, '');
+    const num = digits || (cpuIndex != null ? String(cpuIndex) : cpu.name.slice(0, 3));
     const coproPct = Math.min(100, cpu.coProcessors * 10);
     const hasJob = job !== null;
     const itemLine = hasJob
@@ -1484,7 +1485,7 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
       const wasBusy = cell?.dataset.busy === '1';
       if (!cell) { cell = document.createElement('div'); grid.appendChild(cell); }
       cell.dataset.cpu = cpu.name; cell.dataset.cpuIndex = String(i + 1); cell.dataset.busy = cpu.busy ? '1' : '0';
-      cell.innerHTML = buildCpuCell(cpu, job);
+      cell.innerHTML = buildCpuCell(cpu, job, i + 1);
       cell.className = ['group relative cursor-default pixel-border transition-all duration-300',
         'flex flex-col items-center justify-center gap-1',
         job ? 'w-36 h-32' : 'w-24 h-24',
@@ -1571,8 +1572,11 @@ const machineTotalCount  = mSum?.total_machines ?? 0;
     if (!freqLoaded) {
       freqLoaded = true;
       fetchJSON<any>(`/api/crafting?freq=1&range=-7d`).then(fd => {
-        if (fd?.frequency) renderCraftingFrequency(fd.frequency);
-      }).catch(() => {});
+        renderCraftingFrequency(fd?.frequency ?? []);
+      }).catch(() => {
+        freqLoaded = false; // allow retry on next refresh
+        renderCraftingFrequency([]);
+      });
     }
   }
 

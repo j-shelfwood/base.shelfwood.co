@@ -393,6 +393,24 @@ export async function modActivityHistory(mod: string, range = '-1h'): Promise<Ti
   const interval = parseRangeInterval(range);
   const window = rangeToWindow(range);
 
+  // MI never sets active=1 — derive activity from slot occupancy instead
+  if (mod === 'modern_industrialization') {
+    const rows = await sql`
+      SELECT
+        time_bucket(${window}::interval, time) as bucket,
+        COUNT(DISTINCT name) as active_count
+      FROM mi_machine_slot
+      WHERE time >= NOW() - ${interval}::interval
+        AND count > 0
+      GROUP BY bucket
+      ORDER BY bucket
+    `;
+    return rows.map(r => ({
+      time: new Date(r.bucket as Date).toISOString(),
+      value: Number(r.active_count) || 0,
+    }));
+  }
+
   const rows = await sql`
     SELECT
       time_bucket(${window}::interval, time) as bucket,
