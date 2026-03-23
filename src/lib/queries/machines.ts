@@ -460,6 +460,7 @@ export async function machineUtilisation(range = '-1h'): Promise<MachineUtilisat
   // MI: active flag is never set by collector — derive from slot occupancy.
   // Use machine_activity tick buckets as denominator (consistent ~18s cadence),
   // slot active buckets as numerator (~97s cadence, only written when occupied).
+  // Denominator is pre-aggregated per machine in a single scan (no correlated subquery).
   const miRows = await sql`
     SELECT
       ma_stats.name,
@@ -469,13 +470,7 @@ export async function machineUtilisation(range = '-1h'): Promise<MachineUtilisat
       COALESCE(slot_stats.active_buckets, 0) as active_buckets,
       ROUND(
         COALESCE(slot_stats.active_buckets, 0)::numeric
-        / NULLIF(
-            (SELECT COUNT(DISTINCT time_bucket('97 seconds', ma2.time))
-             FROM machine_activity ma2
-             WHERE ma2.name = ma_stats.name
-               AND ma2.time >= NOW() - ${interval}::interval
-            ), 0
-          ) * 100
+        / NULLIF(denom_stats.total_buckets, 0) * 100
       , 1) as util_pct
     FROM (
       SELECT name, type, mod, COUNT(*) as total_ticks
@@ -492,6 +487,14 @@ export async function machineUtilisation(range = '-1h'): Promise<MachineUtilisat
         AND count > 0
       GROUP BY name
     ) slot_stats ON slot_stats.name = ma_stats.name
+    LEFT JOIN (
+      SELECT name, COUNT(DISTINCT time_bucket('97 seconds', time)) as total_buckets
+      FROM machine_activity
+      WHERE time >= NOW() - ${interval}::interval
+        AND mod = 'modern_industrialization'
+        AND type != 'me_bridge'
+      GROUP BY name
+    ) denom_stats ON denom_stats.name = ma_stats.name
   `;
 
   const mek: MachineUtilisation[] = mekRows.map(r => {
