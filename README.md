@@ -1,3 +1,5 @@
+> **Archived 2026-08-27.** base.shelfwood.co was decommissioned: Coolify app removed from infrastructure.shelfwood.co, deploy workflow deleted. Repository kept read-only for reference.
+
 # Astro Starter Kit: Minimal
 
 ```sh
